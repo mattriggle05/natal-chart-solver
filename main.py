@@ -4,7 +4,7 @@ Using orbital mechanics calculations without astropy or ephemeris libraries.
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def julian_date(year, month, day, hour=0, minute=0, second=0):
     """Calculate Julian Date from calendar date."""
@@ -192,19 +192,18 @@ def zodiac_sign(longitude):
     
     return signs[sign_index], position_in_sign
 
-def main():
+def get_data_by_date_jupiter(year, month, day):
     # Target date
-    year, month, day = 2026, 1, 1
-    print(f"Jupiter's position for {month:02d}/{day:02d}/{year}")
-    print("=" * 60)
+    # print(f"Jupiter's position for {month:02d}/{day:02d}/{year}")
+    # print("=" * 60)
     
     # Calculate Julian Date
     JD = julian_date(year, month, day)
-    print(f"Julian Date: {JD:.2f}")
+    # print(f"Julian Date: {JD:.2f}")
     
     # Time in Julian centuries from J2000.0 (JD 2451545.0)
     T = (JD - 2451545.0) / 36525.0
-    print(f"Centuries from J2000.0: {T:.6f}")
+    # print(f"Centuries from J2000.0: {T:.6f}")
     
     # Obliquity of the ecliptic (J2000.0)
     epsilon = math.radians(23.43928)
@@ -223,12 +222,12 @@ def main():
     ecl_longitude = ecliptic_longitude(x_geo, y_geo)
     zodiac, position = zodiac_sign(ecl_longitude)
     
-    print(f"Zodiac Position: {zodiac} {position:.2f}°")
+    # print(f"Zodiac Position: {zodiac} {position:.2f}°")
     
     # Convert to equatorial coordinates
     x_eq, y_eq, z_eq = ecliptic_to_equatorial(x_geo, y_geo, z_geo, epsilon)
     
-    print(f"Jupiter geocentric (equatorial): ({x_eq:.6f}, {y_eq:.6f}, {z_eq:.6f}) AU")
+    # print(f"Jupiter geocentric (equatorial): ({x_eq:.6f}, {y_eq:.6f}, {z_eq:.6f}) AU")
     
     # Convert to RA and Dec
     ra_hours, dec_deg, distance = rectangular_to_spherical(x_eq, y_eq, z_eq)
@@ -245,16 +244,39 @@ def main():
     dec_m = int((dec_deg_abs - dec_d) * 60)
     dec_s = ((dec_deg_abs - dec_d) * 60 - dec_m) * 60
     
-    print(f"Right Ascension (RA): {ra_h:02d}h {ra_m:02d}m {ra_s:05.2f}s")
-    print(f"                      {ra_hours:.6f} hours")
-    print(f"Declination (Dec):    {dec_sign}{dec_d:02d}° {dec_m:02d}' {dec_s:05.2f}\"")
-    print(f"                      {dec_deg:.6f}°")
-    print(f"Distance from Earth:  {distance:.6f} AU ({distance * 149597870.7:.0f} km)")
-    print()
-    print(f"Ecliptic Longitude:   {ecl_longitude:.6f}°")
-    print(f"Zodiac Sign:          {zodiac} {position:.2f}°")
+    # print(f"Right Ascension (RA): {ra_h:02d}h {ra_m:02d}m {ra_s:05.2f}s")
+    # print(f"                      {ra_hours:.6f} hours")
+    # print(f"Declination (Dec):    {dec_sign}{dec_d:02d}° {dec_m:02d}' {dec_s:05.2f}\"")
+    # print(f"                      {dec_deg:.6f}°")
+    # print(f"Distance from Earth:  {distance:.6f} AU ({distance * 149597870.7:.0f} km)")
+    # print()
+    # print(f"Ecliptic Longitude:   {ecl_longitude:.6f}°")
+    # print(f"Zodiac Sign:          {zodiac} {position:.2f}°")
     
-    return ra_hours, dec_deg, distance, ecl_longitude
+    return zodiac, ecl_longitude
+
+def main():
+
+    start_date = datetime(day=1,month=1,year=2026)
+    prev_zodiac = ""
+    prev_zodiac_count = 0
+    output = ""
+
+    #60190
+
+    for i in range(60190):
+        (zodiac, degrees) = get_data_by_date_jupiter(start_date.year,start_date.month,start_date.day)
+        if (zodiac == prev_zodiac):
+            prev_zodiac_count += 1
+        else:
+            output += prev_zodiac + " : " + str(prev_zodiac_count) + "\n"
+            prev_zodiac = zodiac
+            prev_zodiac_count = 1
+        print(degrees)
+        start_date = start_date + timedelta(days=1)
+
+    print(output)
+
 
 if __name__ == "__main__":
     main()
