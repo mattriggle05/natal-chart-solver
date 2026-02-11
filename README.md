@@ -1,46 +1,8 @@
-# Getting Started with Create React App
+## Natal Chart Solver (WIP)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is a React App built with TypeScript and deployed to Github pages.
 
-## Available Scripts
+Most people know their "Star sign" or "Birth sign," for example, being born in the beginning of september makes me a Virgo. What most people don't know is that they in fact have a number of these signs, one for the sun, the moon, each of the planets and some other important astronomical features. Each of these features, at any point in time, is some portion of the way through the ecliptic, which is the path that the sun traces through the sky. The ecliptic passes over different constellations, giving the signs their names. We assign these signs to ourselves by where these astronomical features were on the date and time of our birth.
 
-In the project directory, you can run:
+Natal Chart Solver takes in information about one's star signs and attempts to use them to calculate a persons birth date and perhaps birth time. It does this by taking in a multitude of signs and calculating a range dates when the planets would be aligned correctly along the ecliptic to produce such a result. With enough data points (i.e. the signs of multiple planets) we can narrow this range down to hopefully within a single day.
 
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
