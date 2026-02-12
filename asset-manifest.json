@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/natal-chart-solver/static/css/main.e6c13ad2.css",
-    "main.js": "/natal-chart-solver/static/js/main.702fbc40.js",
+    "main.css": "/natal-chart-solver/static/css/main.fbb84024.css",
+    "main.js": "/natal-chart-solver/static/js/main.d3f57e45.js",
     "static/js/453.00d4c595.chunk.js": "/natal-chart-solver/static/js/453.00d4c595.chunk.js",
     "index.html": "/natal-chart-solver/index.html",
-    "main.e6c13ad2.css.map": "/natal-chart-solver/static/css/main.e6c13ad2.css.map",
-    "main.702fbc40.js.map": "/natal-chart-solver/static/js/main.702fbc40.js.map",
+    "main.fbb84024.css.map": "/natal-chart-solver/static/css/main.fbb84024.css.map",
+    "main.d3f57e45.js.map": "/natal-chart-solver/static/js/main.d3f57e45.js.map",
     "453.00d4c595.chunk.js.map": "/natal-chart-solver/static/js/453.00d4c595.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.e6c13ad2.css",
-    "static/js/main.702fbc40.js"
+    "static/css/main.fbb84024.css",
+    "static/js/main.d3f57e45.js"
   ]
 }
