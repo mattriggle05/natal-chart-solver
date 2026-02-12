@@ -1,4 +1,4 @@
-## Natal Chart Solver (WIP)
+## [Natal Chart Solver (WIP)](https://mattriggle05.github.io/natal-chart-solver/)
 
 This is a React App built with TypeScript and deployed to Github pages.
 
