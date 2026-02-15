@@ -20,71 +20,48 @@
     position: absolute;
     border: 0.00125em solid #dddddd80;
     border-radius: 50%;
-
-    animation: spin infinite linear both;
-
+    transition: transform 2s ease-in-out;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
 
-    animation-delay: -420707s;
-
-    &.mercury {
-        animation-duration: 24080ms;
+    &.Mercury {
         width: 17.5%;
         height: 17.5%;
     }
 
-    &.venus {
-        animation-duration: 61520ms;
+    &.Venus {
         width: 23.125%;
         height: 23.125%;
     }
 
-    &.earth {
-        animation-duration: 100000ms;
+    &.Earth {
         width: 30%;
         height: 30%;
     }
 
-    &.mars {
-        animation-duration: 188080ms;
+    &.Mars {
         width: 36.25%;
         height: 36.25%;
     }
 
-    &.jupiter {
-        animation-duration: 1186260ms;
+    &.Jupiter {
         width: 50%;
         height: 50%;
     }
 
-    &.saturn {
-        animation-duration: 2944750ms;
+    &.Saturn {
         width: 61.875%;
         height: 61.875%;
     }
 
-    &.uranus {
-        animation-duration: 8401680ms;
+    &.Uranus {
         width: 78.75%;
         height: 78.75%;
     }
 
-    &.neptune {
-        animation-duration: 16479130ms;
+    &.Neptune {
         width: 95%;
         height: 95%;
-    }
-}
-
-@keyframes spin {
-    from {
-        transform: translate(-50%, -50%);
-    }
-
-    to {
-        transform: translate(-50%, -50%) rotate(-360deg);
     }
 }
 
@@ -96,49 +73,49 @@
     top: 50%;
     border: 0.15em solid black;
 
-    &.mercury {
+    &.Mercury {
         width: 10.7%;
         height: 10.7%;
         background-color: rgb(118, 166, 189);
     }
 
-    &.venus {
+    &.Venus {
         width: 10.8%;
         height: 10.8%;
         background-color: rgb(199, 100, 7);
     }
 
-    &.earth {
+    &.Earth {
         width: 8.3%;
         height: 8.3%;
         background-color: rgb(0, 174, 255);
     }
 
-    &.mars {
+    &.Mars {
         width: 6.2%;
         height: 6.2%;
         background-color: rgb(223, 53, 2);
     }
 
-    &.jupiter {
+    &.Jupiter {
         width: 8.75%;
         height: 8.75%;
         background-color: rgb(235, 160, 61);
     }
 
-    &.saturn {
+    &.Saturn {
         width: 6%;
         height: 6%;
         background-color: rgb(218, 181, 127);
     }
 
-    &.uranus {
+    &.Uranus {
         width: 2.9%;
         height: 2.9%;
         background-color: rgb(84, 196, 196);
     }
 
-    &.neptune {
+    &.Neptune {
         width: 2.9%;
         height: 2.9%;
         background-color: rgb(0, 73, 182);
