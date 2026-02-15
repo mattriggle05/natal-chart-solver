@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import SolarSystem from './SolarSystem';
 import './App.css';
-import { EclipticLongitude, Body, FlexibleDateTime } from 'astronomy-engine';
+import { Ecliptic, Body, GeoVector } from 'astronomy-engine';
 
 
 function App() {
@@ -9,7 +9,7 @@ function App() {
   const [currBody, setCurrBody] = useState<Body>(Body.Neptune);
   const [currDate, setCurrDate] = useState<string>('2026-01-01');
 
-  var result = useMemo(() =>EclipticLongitude(currBody, new Date(currDate)), [currBody,currDate])
+  var result = useMemo(() => Ecliptic(GeoVector(currBody, new Date(currDate), true)).elon, [currBody,currDate])
 
   return (
     <>
@@ -28,7 +28,7 @@ function App() {
 
       <input type="date" value={currDate} onChange={e => setCurrDate(e.target.value)} />
 
-      <p>{result}</p>
+      <p style={{color: 'white'}}>{result}</p>
     </>
   );
 }
