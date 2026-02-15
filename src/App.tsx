@@ -1,11 +1,15 @@
-// import React from 'react';
+import { useState, useMemo } from 'react';
 import SolarSystem from './SolarSystem';
 import './App.css';
 import { EclipticLongitude, Body, FlexibleDateTime } from 'astronomy-engine';
 
+
 function App() {
 
-  var result: number = EclipticLongitude(Body.Neptune, new Date(2026,1,1))
+  const [currBody, setCurrBody] = useState<Body>(Body.Neptune);
+  const [currDate, setCurrDate] = useState<string>('2026-01-01');
+
+  var result = useMemo(() =>EclipticLongitude(currBody, new Date(currDate)), [currBody,currDate])
 
   return (
     <>
@@ -15,11 +19,13 @@ function App() {
 
       <SolarSystem />
 
-      <select>
+      <select value={currBody} onChange={e => setCurrBody(e.target.value as Body)}>
         {Object.values(Body).map(x => <option>{x}</option>)}
       </select>
 
-      <p>{ result }</p>
+      <input type="date" value={currDate} onChange={e => setCurrDate(e.target.value)} />
+
+      <p>{result}</p>
     </>
   );
 }
