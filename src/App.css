@@ -12,3 +12,9 @@
     margin-top: 10px;
     margin-bottom: 10px;
 }
+
+.system-container {
+    position: relative;
+    width: 1600px;
+    height: 1600px;
+}

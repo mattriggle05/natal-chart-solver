@@ -17,10 +17,13 @@ function App() {
         <h1>Coming soon...</h1>
       </div>
 
-      <SolarSystem />
+      <div className="system-container">
+        <SolarSystem />
+      </div>
+      
 
       <select value={currBody} onChange={e => setCurrBody(e.target.value as Body)}>
-        {Object.values(Body).map(x => <option>{x}</option>)}
+        {Object.values(Body).map(x => <option key={ x } value ={ x }>{ x }</option>)}
       </select>
 
       <input type="date" value={currDate} onChange={e => setCurrDate(e.target.value)} />
