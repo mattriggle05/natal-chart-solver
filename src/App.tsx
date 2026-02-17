@@ -14,7 +14,7 @@ function App() {
       </div>
 
       <div className="system-container">
-        <SolarSystem date={ currDate } />
+        <SolarSystem date={ new Date(currDate) } />
       </div>
       
       <input type="date" value={currDate} onChange={e => setCurrDate(e.target.value)} />
