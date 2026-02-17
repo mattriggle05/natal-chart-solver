@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import SolarSystem from './SolarSystem';
 import styles from './App.module.css';
-import clsx from 'clsx';
+// import clsx from 'clsx';
 
 
 function App() {
