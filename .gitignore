@@ -29,3 +29,6 @@ yarn-error.log*
 
 # Vite
 *.local
+
+# Old testing files
+*.py
