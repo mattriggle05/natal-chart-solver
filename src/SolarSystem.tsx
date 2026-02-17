@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import styles from './SolarSystem.module.css';
 import { Body, EclipticLongitude, FlexibleDateTime } from 'astronomy-engine';
+import styles from './SolarSystem.module.css';
+import clsx from 'clsx';
 
 
 function SolarSystem({ date }: {date: FlexibleDateTime}) { 
@@ -17,9 +18,9 @@ function SolarSystem({ date }: {date: FlexibleDateTime}) {
 
     return <div className={styles.system}>
         <div className={styles.sun}></div>
-        {Object.keys(planetPositions).map(planet =>
-            <div key={planet} className={`orbit ${planet}`} style={{transform: `translate(-50%,-50%) rotate(${planetPositions[planet]}deg)`}}>
-                <div className={`planet ${planet}`} />
+        {Object.keys(planetPositions).map(p =>
+            <div key={p} className={clsx(styles.orbit, styles[p])} style={{transform: `translate(-50%,-50%) rotate(${planetPositions[p]}deg)`}}>
+                <div className={clsx(styles.planet, styles[p])} />
             </div>
         )}
     </div>;

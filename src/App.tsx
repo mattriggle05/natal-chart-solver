@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import SolarSystem from './SolarSystem';
-import './App.css';
+import styles from './App.module.css';
+import clsx from 'clsx';
 
 
 function App() {
@@ -9,11 +10,11 @@ function App() {
 
   return (
     <>
-      <div className='description'>
+      <div className={styles.description}>
         <h1>Coming soon...</h1>
       </div>
 
-      <div className="system-container">
+      <div className={ styles.container }>
         <SolarSystem date={ new Date(currDate) } />
       </div>
       
