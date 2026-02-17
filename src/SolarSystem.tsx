@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import './SolarSystem.css';
+import styles from './SolarSystem.module.css';
 import { Body, EclipticLongitude, FlexibleDateTime } from 'astronomy-engine';
 
 
@@ -15,8 +15,8 @@ function SolarSystem({ date }: {date: FlexibleDateTime}) {
         );
     }, [date]);
 
-    return <div className="system">
-        <div className="sun"></div>
+    return <div className={styles.system}>
+        <div className={styles.sun}></div>
         {Object.keys(planetPositions).map(planet =>
             <div key={planet} className={`orbit ${planet}`} style={{transform: `translate(-50%,-50%) rotate(${planetPositions[planet]}deg)`}}>
                 <div className={`planet ${planet}`} />
