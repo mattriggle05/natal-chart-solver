@@ -3,7 +3,6 @@ import { Body, EclipticLongitude, FlexibleDateTime } from 'astronomy-engine';
 import styles from './SolarSystem.module.css';
 import clsx from 'clsx';
 
-
 function SolarSystem({ date }: {date: FlexibleDateTime}) { 
     const planets: Body[] = [Body.Mercury, Body.Venus, Body.Earth, Body.Mars, Body.Jupiter, Body.Saturn, Body.Uranus, Body.Neptune];
     const [planetPositions, setPlanetPositions] = useState(Object.fromEntries(planets.map(p => [p, 0])));
