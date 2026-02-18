@@ -12,7 +12,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build:wasm": "wasm-pack build crate --target web --out-dir wasm\\pkg --release",
+    "build": "npm run build:wasm && tsc && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build"
