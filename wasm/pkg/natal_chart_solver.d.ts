@@ -3,13 +3,13 @@
 
 export function main(): void;
 
-export function mars_longitude(julian_date: number): number;
+export function neptune_longitude(julian_date: number): number;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly mars_longitude: (a: number) => number;
+    readonly neptune_longitude: (a: number) => number;
     readonly main: () => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_start: () => void;

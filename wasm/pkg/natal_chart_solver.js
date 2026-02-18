@@ -8,8 +8,8 @@ export function main() {
  * @param {number} julian_date
  * @returns {number}
  */
-export function mars_longitude(julian_date) {
-    const ret = wasm.mars_longitude(julian_date);
+export function neptune_longitude(julian_date) {
+    const ret = wasm.neptune_longitude(julian_date);
     return ret;
 }
 
