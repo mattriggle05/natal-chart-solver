@@ -7,8 +7,27 @@
     transform: translateX(-50%);
 }
 
+.description h1 {
+    font-size: 8vh;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
 .container {
     position: relative;
-    width: 800px;
-    height: 800px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 75vh;
+    height: 75vh;
+}
+
+.dateInput {
+    position: relative;
+    text-align: center;
+    font-size: 2vh;
+    margin-top: 5px;
+    height: 3vh;
+    width: 18vh;
+    left: 50%;
+    transform: translateX(-50%);
 }

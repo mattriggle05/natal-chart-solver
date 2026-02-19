@@ -10,7 +10,6 @@ function SolarSystem({ date }: { date: Date }) {
         init()
             .then(() => {
                 const jde = date.getTime() / 86400000.0 + 2440587.5;
-                console.log('JDE:', jde);
                 const result = heliocentric_longitudes_at_jde(jde, new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]));
         
                 if (result) {
