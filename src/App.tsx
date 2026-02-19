@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import SolarSystem from './SolarSystem';
 import styles from './App.module.css';
-import init, { neptune_longitude } from '@wasm/natal_chart_solver';
+import init, { geocentric_longitudes_at_jde } from '@wasm/natal_chart_solver';
 // import clsx from 'clsx';
 
 
@@ -12,11 +12,17 @@ function App() {
   useEffect(() => {
     init()
       .then(() => {
-        const longitude = neptune_longitude(2451545.0);
-        setWasmResult(`${longitude.toFixed(4)}°`);
+        const jde = new Date(currDate).getTime() / 86400000.0 + 2440587.5;
+        const result = geocentric_longitudes_at_jde(jde, new Uint8Array([0, 1, 3, 4, 5, 6, 7]));
+
+        if (result) {
+          setWasmResult(`${result}`);
+        } else { 
+          setWasmResult(`An error occurred`);
+        }
       })
       .catch((e: unknown ) => setWasmResult(`WASM error: ${e}`));
-  }, []);
+  }, [currDate]);
 
   return (
     <>
@@ -29,8 +35,6 @@ function App() {
       </div>
       
       <input type="date" value={currDate} onChange={e => setCurrDate(e.target.value)} />
-
-      <p>{ wasmResult }</p>
     </>
   );
 }
