@@ -15,7 +15,7 @@ function SolarSystem({ date }: { date: Date }) {
             })
     }, [date]);
 
-    return <div className={styles.system}>
+    return <div className={styles.system}> 
         <div className={styles.sun}></div>
         {
             ['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune',].map((p, i) =>

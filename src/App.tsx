@@ -20,12 +20,6 @@ function App() {
             featureIds: [10, 0, 1, 3, 4, 5, 6, 7],
             featureSigns: [5, 6, 7, 3, 4, 0, 2, 0]
         });
-        // search({
-        //     startJd: jde1,
-        //     endJd: jde2,
-        //     featureIds: [0],
-        //     featureSigns: [6]
-        // });
     }
 
     return (

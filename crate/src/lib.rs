@@ -30,7 +30,7 @@ pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], 
     return output;
 }
 
-/// Returns true if there exists a valid alignment with all of the features and signs at an exact Julian Date, otherwise false.
+/// Returns true if there exists a valid alignment of the nth feature_id with the nth feature_sign at an exact Julian Date, otherwise false.
 /// 
 /// * `julian_date` - the exact Julian Date to perform the check at
 /// * `feature_ids` - features to calculate for, with the best filter first, ids as defined in /src/types/features.ts
@@ -73,7 +73,7 @@ pub fn observer_longitude(observer_coords: RectangularCoordinates, feature_coord
 }
 
 
-///
+/// Returns a list of the solar system's planet's ecliptic longitudes at a given date, used to model the system simply in UI
 /// 
 /// * `jde` - the exact Julian Date for which to get the positions
 #[wasm_bindgen]
