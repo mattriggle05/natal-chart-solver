@@ -10,8 +10,8 @@ pub fn main() {}
 /// 
 /// * `start_julian_date` - a Julian Date for the beginning date for the range of the search, inclusive
 /// * `end_julian_date` - a Julian Date the end date for rhe range of the search, exclusive
-/// * `feature_ids` - features to calculate for, ids as defined in /src/types/features.ts
-/// * `feature_signs` - the zodiac sign of each feature, must be the same length as feature_ids 
+/// * `feature_ids` - features to calculate for, with the best filter first, ids as defined in /src/types/features.ts
+/// * `feature_signs` - the zodiac sign of each feature, must be the same length as feature_ids, ids as defined in /src/types/signs.ts
 #[wasm_bindgen]
 pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
     let mut output: Vec<f64> = Vec::new();
@@ -30,21 +30,25 @@ pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], 
     return output;
 }
 
-
+/// Returns true if there exists a valid alignment with all of the features and signs at an exact Julian Date, otherwise false.
+/// 
+/// * `julian_date` - the exact Julian Date to perform the check at
+/// * `feature_ids` - features to calculate for, with the best filter first, ids as defined in /src/types/features.ts
+/// * `feature_signs` - the zodiac sign of each feature, must be the same length as feature_ids, ids as defined in /src/types/signs.ts
 pub fn is_valid_date(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
     let earth_coords: RectangularCoordinates = vsop87c::earth(julian_date);
 
     for i in 0..feature_ids.len() {
         let longitude: f64 = match feature_ids[i] {
             // planets
-            0 => geocentric_longitude(vsop87c::mercury(julian_date), earth_coords),
-            1 => geocentric_longitude(vsop87c::venus(julian_date), earth_coords),
+            0 => observer_longitude(earth_coords, vsop87c::mercury(julian_date), ),
+            1 => observer_longitude(earth_coords, vsop87c::venus(julian_date)),
             // 2 is earth
-            3 => geocentric_longitude(vsop87c::mars(julian_date), earth_coords),
-            4 => geocentric_longitude(vsop87c::jupiter(julian_date), earth_coords),
-            5 => geocentric_longitude(vsop87c::saturn(julian_date), earth_coords),
-            6 => geocentric_longitude(vsop87c::uranus(julian_date), earth_coords),
-            7 => geocentric_longitude(vsop87c::neptune(julian_date), earth_coords),
+            3 => observer_longitude(earth_coords, vsop87c::mars(julian_date) ),
+            4 => observer_longitude(earth_coords, vsop87c::jupiter(julian_date)),
+            5 => observer_longitude(earth_coords, vsop87c::saturn(julian_date)),
+            6 => observer_longitude(earth_coords, vsop87c::uranus(julian_date)),
+            7 => observer_longitude(earth_coords, vsop87c::neptune(julian_date)),
             // sun
             10 => (vsop87b::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0),
             // catch all error case
@@ -59,58 +63,29 @@ pub fn is_valid_date(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8])
 }
 
 
-
-#[wasm_bindgen]
-pub fn heliocentric_longitudes_at_jde(jde: f64, planet_ids:  &[u8]) -> Option<Vec<f64>> {
-    let mut output: Vec<f64> = Vec::with_capacity(8);
-    
-    for i in 0..planet_ids.len() {
-        let feature_coords: SphericalCoordinates = match planet_ids[i] {
-            0 => vsop87d::mercury(jde),
-            1 => vsop87d::venus(jde),
-            2 => vsop87d::earth(jde),
-            3 => vsop87d::mars(jde),
-            4 => vsop87d::jupiter(jde),
-            5 => vsop87d::saturn(jde),
-            6 => vsop87d::uranus(jde),
-            7 => vsop87d::neptune(jde),
-            _ => return None,
-        };
-
-        output.push(feature_coords.longitude().to_degrees().rem_euclid(360.0));  
-    }
-
-    return Some(output)
-}
-
-#[wasm_bindgen]
-pub fn geocentric_longitudes_at_jde(jde: f64, planet_ids:  &[u8]) -> Option<Vec<f64>> {
-    let mut output: Vec<f64> = Vec::with_capacity(8);
-    
-    let earth_coords: RectangularCoordinates = vsop87c::earth(jde);
-
-    for i in 0..planet_ids.len() {
-        let feature_coords: RectangularCoordinates = match planet_ids[i] {
-            0 => vsop87c::mercury(jde),
-            1 => vsop87c::venus(jde),
-            // 2 is earth
-            3 => vsop87c::mars(jde),
-            4 => vsop87c::jupiter(jde),
-            5 => vsop87c::saturn(jde),
-            6 => vsop87c::uranus(jde),
-            7 => vsop87c::neptune(jde),
-            _ => return None,
-        };
-
-        output.push(geocentric_longitude(feature_coords, earth_coords));  
-    }
-
-    return Some(output)
-}
-
-/// * `feature_coords` - RectangularCoordinates of the feature you want to get the geocentric longitude of
-/// * `earth_coords` - RectangularCoordinates of earth to perform the conversion
+/// Returns the ecliptic longitude of a feature around a specified observer feature
+/// 
+/// * `observer_coords` - RectangularCoordinates of the feature that is the reference frame of the calculation
+/// * `feature_coords` - RectangularCoordinates of the feature whose longitude you want to get
 #[inline]
-pub fn geocentric_longitude(feature_coords: RectangularCoordinates, earth_coords: RectangularCoordinates ) -> f64 {
-    return (feature_coords.y - earth_coords.y).atan2(feature_coords.x - earth_coords.x).to_degrees().rem_euclid(360.0);
+pub fn observer_longitude(observer_coords: RectangularCoordinates, feature_coords: RectangularCoordinates) -> f64 {
+    return (feature_coords.y - observer_coords.y).atan2(feature_coords.x - observer_coords.x).to_degrees().rem_euclid(360.0);
+}
+
+
+///
+/// 
+/// * `jde` - the exact Julian Date for which to get the positions
+#[wasm_bindgen]
+pub fn system_model_at_date(julian_date: f64) -> Vec<f64> {
+    return Vec::from([
+        vsop87d::mercury(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::venus(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::earth(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::mars(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::jupiter(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::saturn(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::uranus(julian_date).longitude().to_degrees().rem_euclid(360.0),
+        vsop87d::neptune(julian_date).longitude().to_degrees().rem_euclid(360.0)
+    ]);
 }
