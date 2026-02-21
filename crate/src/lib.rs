@@ -45,7 +45,7 @@ pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], 
             }
         }
 
-        curr_date += 1.0;
+        curr_date += 3.0;
     }
 
     return Some(output);
