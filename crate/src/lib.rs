@@ -13,43 +13,52 @@ pub fn main() {}
 /// * `feature_ids` - features to calculate for, ids as defined in /src/types/features.ts
 /// * `feature_signs` - the zodiac sign of each feature, must be the same length as feature_ids 
 #[wasm_bindgen]
-pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Option<Vec<f64>> {
+pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
     let mut output: Vec<f64> = Vec::new();
     let mut curr_date: f64 = start_julian_date;
 
     while curr_date < end_julian_date {
-        let earth_coords: RectangularCoordinates = vsop87c::earth(curr_date);
+        let valid: bool = is_valid_date(curr_date, &feature_ids, &feature_signs);
 
-        for i in 0..feature_ids.len() {
-            let longitude: f64 = match feature_ids[i] {
-                // inner planets
-                0 => geocentric_longitude(vsop87c::mercury(curr_date), earth_coords),
-                1 => geocentric_longitude(vsop87c::venus(curr_date), earth_coords),
-                // 2 is earth
-                3 => geocentric_longitude(vsop87c::mars(curr_date), earth_coords),
-                4 => geocentric_longitude(vsop87c::jupiter(curr_date), earth_coords),
-                5 => geocentric_longitude(vsop87c::saturn(curr_date), earth_coords),
-                6 => geocentric_longitude(vsop87c::uranus(curr_date), earth_coords),
-                7 => geocentric_longitude(vsop87c::neptune(curr_date), earth_coords),
-                // sun
-                10 => (vsop87b::earth(curr_date).longitude().to_degrees() + 180.0).rem_euclid(360.0),
-                // catch all error case
-                _ => return None,
-            };
-
-            const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64;
-            if feature_signs[i] != (longitude * DIVIDE_BY_30) as u8 { break; }
-
-            if i + 1 == feature_ids.len() {
-                output.push(curr_date);
-            }
+        if valid {
+            output.push(curr_date)
         }
 
-        curr_date += 3.0;
+        curr_date += 1.0;
     }
 
-    return Some(output);
+    return output;
 }
+
+
+pub fn is_valid_date(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
+    let earth_coords: RectangularCoordinates = vsop87c::earth(julian_date);
+
+    for i in 0..feature_ids.len() {
+        let longitude: f64 = match feature_ids[i] {
+            // planets
+            0 => geocentric_longitude(vsop87c::mercury(julian_date), earth_coords),
+            1 => geocentric_longitude(vsop87c::venus(julian_date), earth_coords),
+            // 2 is earth
+            3 => geocentric_longitude(vsop87c::mars(julian_date), earth_coords),
+            4 => geocentric_longitude(vsop87c::jupiter(julian_date), earth_coords),
+            5 => geocentric_longitude(vsop87c::saturn(julian_date), earth_coords),
+            6 => geocentric_longitude(vsop87c::uranus(julian_date), earth_coords),
+            7 => geocentric_longitude(vsop87c::neptune(julian_date), earth_coords),
+            // sun
+            10 => (vsop87b::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0),
+            // catch all error case
+            _ => return false,
+        };
+
+        const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64;
+        if feature_signs[i] != (longitude * DIVIDE_BY_30) as u8 { return false }
+    }
+
+    return true
+}
+
+
 
 #[wasm_bindgen]
 pub fn heliocentric_longitudes_at_jde(jde: f64, planet_ids:  &[u8]) -> Option<Vec<f64>> {
