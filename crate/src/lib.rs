@@ -1,8 +1,67 @@
+use std::ops::Add;
+
 use wasm_bindgen::prelude::*;
 use vsop87::*;
 
 #[wasm_bindgen(start)]
 pub fn main() {}
+
+
+
+/// A function to search through a range of dates and return subsets of those dates where a certain planetary alignment occurred.
+/// 
+/// Searches the range [start_date, end_date) for the alignment of the nth feature_id with the nth feature_sign.
+/// 
+/// * `start_julian_date` - a Julian Date for the beginning date for the range of the search, inclusive
+/// * `end_julian_date` - a Julian Date the end date for rhe range of the search, exclusive
+/// * `feature_ids` - features to calculate for, ids as defined in /src/types/features.ts
+/// * `feature_signs` - the zodiac sign of each feature, must be the same length as feature_ids 
+#[wasm_bindgen]
+pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Option<Vec<f64>> {
+    
+    let mut curr_date: f64 = start_julian_date;
+
+    while curr_date < end_julian_date {
+        let earth_coords: RectangularCoordinates = vsop87c::earth(curr_date);
+
+        for i in 0..feature_ids.len() {
+            let longitude: f64 = match feature_ids[i] {
+                // inner planets
+                0 => geocentric_longitude(vsop87c::mercury(curr_date), vsop87c::earth(curr_date)),
+                1 => geocentric_longitude(vsop87c::venus(curr_date), vsop87c::earth(curr_date)),
+                2 => geocentric_longitude(vsop87c::earth(curr_date), vsop87c::earth(curr_date)),
+                3 => geocentric_longitude(vsop87c::mars(curr_date), vsop87c::earth(curr_date)),
+                4 => geocentric_longitude(vsop87c::jupiter(curr_date), vsop87c::earth(curr_date)),
+                5 => geocentric_longitude(vsop87c::saturn(curr_date), vsop87c::earth(curr_date)),
+                6 => geocentric_longitude(vsop87c::uranus(curr_date), vsop87c::earth(curr_date)),
+                7 => geocentric_longitude(vsop87c::neptune(curr_date), vsop87c::earth(curr_date)),
+                // sun
+                10 => vsop87d::earth(curr_date).longitude().to_degrees().add(180.0).rem_euclid(360.0),
+                // catch all error case
+                _ => return None,
+            };
+
+            const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64;
+            if ( feature_signs[i] != (longitude * DIVIDE_BY_30) as u8) { break; }
+
+            
+
+        }
+
+        curr_date += 1.0;
+    }
+
+    
+    
+    
+    
+    
+    return Some(Vec::new());
+}
+
+
+
+
 
 #[wasm_bindgen]
 pub fn heliocentric_longitudes_at_jde(jde: f64, planet_ids:  &[u8]) -> Option<Vec<f64>> {
@@ -52,10 +111,7 @@ pub fn geocentric_longitudes_at_jde(jde: f64, planet_ids:  &[u8]) -> Option<Vec<
     return Some(output)
 }
 
-/// Converts heliocentric SphericalCoordinates around the sun to geocentric SphericalCoordinates
-/// 
-/// Also takes in  
-/// 
+
 /// * `feature_coords` - RectangularCoordinates of the feature you want to get the geocentric longitude of
 /// * `earth_coords` - RectangularCoordinates of earth to perform the conversion
 #[inline]
