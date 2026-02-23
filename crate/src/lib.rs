@@ -21,37 +21,37 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
     let mut curr_windows: Vec<(f64, f64)> = Vec::new();
     const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64; // calculated at compile time
 
+
     for i in 0..feature_ids.len() {
         const COARSE_STEP: f64 = 1.0;
 
         for window in prev_windows.iter() {
-            let mut curr_date: f64 = window.0;
-            let mut prev_longitude: f64 = 0.0;
-            let mut prev_longitude_valid: bool = false;
-            let mut prev_derivative_sign: i8 = 0;
-            let mut curr_window_start: f64 = -1.0;
+            let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
+            let mut prev_longitude_valid: bool = (prev_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
+            let mut curr_window_start: f64 = prev_longitude;
+            let mut prev_derivative: f64 = instantaneous_velocity(window.0, feature_ids[i]);
 
 
-
-
-            while curr_date < end_julian_date - COARSE_STEP {
+            let mut curr_date: f64 = window.0 + COARSE_STEP;
+            while curr_date < end_julian_date {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
+                let curr_derivative: f64 = instantaneous_velocity(curr_date, feature_ids[i]);
+
+
 
                 if !prev_longitude_valid && curr_longitude_valid {
-                    curr_window_start = bisect(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i])
+                    curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i])
                 } else if prev_longitude_valid && !curr_longitude_valid {
-                    curr_windows.push((curr_window_start, bisect(curr_date - COARSE_STEP, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i])))
+                    curr_windows.push((curr_window_start, bisection_value_find(curr_date - COARSE_STEP, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i])))
                 }
+
 
                 prev_longitude = curr_longitude;
                 prev_longitude_valid = curr_longitude_valid;
-
+                prev_derivative = curr_derivative;
                 curr_date += COARSE_STEP;
             }
-
-            
-
 
 
         }
@@ -60,15 +60,23 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
         curr_windows = Vec::new();
     }
 
-
- 
     return Vec::new();
 }
 
 
 
 
-pub fn bisect(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature_id: u8) -> f64 {
+
+/// instantaneous velocity using definition of a derivative
+#[inline]
+pub fn instantaneous_velocity(julian_date: f64, feature_id: u8) -> f64{
+    const DERIVATIVE_STEP: f64 = 6e-6_f64; // equivalent to the cube root of f64::EPSILON, for error stuff
+    const DOUBLE_DERIVATIVE_STEP: f64 = 1.2e-5_f64; 
+
+    return (geocentric_longitude(julian_date + DERIVATIVE_STEP, feature_id) - geocentric_longitude(julian_date - DERIVATIVE_STEP, feature_id)) / DOUBLE_DERIVATIVE_STEP
+}
+
+pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature_id: u8) -> f64 {
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
     const FIVE_MINUTES: f64 = 1.0_f64 / 244.0_f64;
