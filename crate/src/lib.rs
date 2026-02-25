@@ -8,7 +8,16 @@ pub fn main() {}
 
 
 
-
+///
+///  +_+_+_+_+_-_-_-_
+///         ^ ^
+/// 
+/// 
+/// 
+/// 
+/// 
+/// 
+/// 
 
 
 
@@ -29,15 +38,18 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
             let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
             let mut prev_longitude_valid: bool = (prev_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
             let mut curr_window_start: f64 = prev_longitude;
-            let mut prev_derivative: f64 = instantaneous_velocity(window.0, feature_ids[i]);
+
 
 
             let mut curr_date: f64 = window.0 + COARSE_STEP;
             while curr_date < end_julian_date {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
-                let curr_derivative: f64 = instantaneous_velocity(curr_date, feature_ids[i]);
 
+                let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
+
+
+                
 
 
                 if !prev_longitude_valid && curr_longitude_valid {
@@ -49,7 +61,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 
                 prev_longitude = curr_longitude;
                 prev_longitude_valid = curr_longitude_valid;
-                prev_derivative = curr_derivative;
                 curr_date += COARSE_STEP;
             }
 
