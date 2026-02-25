@@ -40,17 +40,20 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
             let mut curr_window_start: f64 = prev_longitude;
 
 
-
             let mut curr_date: f64 = window.0 + COARSE_STEP;
+
             while curr_date < end_julian_date {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
                 let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
 
+                let left_diff: f64 = curr_longitude - prev_longitude;
+                let right_diff: f64 = next_longitude - curr_longitude;
 
-                
+                if f64_same_sign(left_diff, right_diff) {
 
+                }
 
                 if !prev_longitude_valid && curr_longitude_valid {
                     curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i])
@@ -63,8 +66,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                 prev_longitude_valid = curr_longitude_valid;
                 curr_date += COARSE_STEP;
             }
-
-
         }
 
         prev_windows = curr_windows;
@@ -78,8 +79,19 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 
 
 
+
+/// bit manip to check signs, treats +0.0 and -0.0 as their own sign
+/// in this use case its impossible for a and b to both be 0 so we ignore it
+#[inline(always)]
+pub fn f64_same_sign(a: f64, b: f64) -> bool {
+    let a: u64 = a.to_bits();
+    let b: u64 = b.to_bits();
+    if a << 1 == 0 || b << 1 == 0 { return false; }
+    return (a ^ b) >> 63 == 0
+}
+
 /// instantaneous velocity using definition of a derivative
-#[inline]
+#[inline(always)]
 pub fn instantaneous_velocity(julian_date: f64, feature_id: u8) -> f64{
     const DERIVATIVE_STEP: f64 = 6e-6_f64; // equivalent to the cube root of f64::EPSILON, for error stuff
     const DOUBLE_DERIVATIVE_STEP: f64 = 1.2e-5_f64; 
@@ -108,9 +120,6 @@ pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target
     return -1.0
 }
 
-
-
-
 #[inline]
 pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
     return match feature_id {
@@ -135,7 +144,7 @@ pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
 /// 
 /// * `observer_coords` - RectangularCoordinates of the feature that is the reference frame of the calculation
 /// * `feature_coords` - RectangularCoordinates of the feature whose longitude you want to get
-#[inline]
+#[inline(always)]
 pub fn observer_longitude(observer_coords: RectangularCoordinates, feature_coords: RectangularCoordinates) -> f64 {
     return (feature_coords.y - observer_coords.y).atan2(feature_coords.x - observer_coords.x).to_degrees().rem_euclid(360.0);
 }
