@@ -30,7 +30,7 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                 let right_diff: f64 = next_longitude - curr_longitude;
 
                 if f64_same_sign(left_diff, right_diff) {
-
+                    
                 }
 
                 if !prev_longitude_valid && curr_longitude_valid {
@@ -51,6 +51,13 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
     }
 
     return Vec::new();
+}
+
+///
+#[inline(always)]
+pub fn bisection_derivative_find(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature_id: u8) -> f64{
+    let mut left: f64 = start_julian_date;
+    let mut right: f64 = end_julian_date;
 }
 
 /// bit manip to check signs, treats +0.0 and -0.0 as their own sign
@@ -82,15 +89,15 @@ pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target
         let midpoint_longitude: f64 = geocentric_longitude(midpoint, feature_id);
 
         if (midpoint_longitude - target_value).abs() < FIVE_MINUTES {
-            return midpoint_longitude
+            return midpoint;
         } else if midpoint_longitude < target_value {
             right = midpoint;
          } else {
-            left = midpoint_longitude
+            left = midpoint;
          }
     }
 
-    return -1.0
+    return midpoint;
 }
 
 #[inline]
