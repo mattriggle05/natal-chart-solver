@@ -4,26 +4,6 @@ use vsop87::*;
 #[wasm_bindgen(start)]
 pub fn main() {}
 
-
-
-
-
-///
-///  +_+_+_+_+_-_-_-_
-///         ^ ^
-/// 
-/// 
-/// 
-/// 
-/// 
-/// 
-/// 
-
-
-
-
-
-
 #[wasm_bindgen]
 pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
     let mut prev_windows: Vec<(f64, f64)> = Vec::from([(start_julian_date, end_julian_date)]);
@@ -38,7 +18,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
             let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
             let mut prev_longitude_valid: bool = (prev_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
             let mut curr_window_start: f64 = prev_longitude;
-
 
             let mut curr_date: f64 = window.0 + COARSE_STEP;
 
