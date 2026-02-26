@@ -10,7 +10,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
     let mut curr_windows: Vec<(f64, f64)> = Vec::new();
     const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64; // calculated at compile time
 
-
     for i in 0..feature_ids.len() {
         const COARSE_STEP: f64 = 1.0;
 
@@ -53,11 +52,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 
     return Vec::new();
 }
-
-
-
-
-
 
 /// bit manip to check signs, treats +0.0 and -0.0 as their own sign
 /// in this use case its impossible for a and b to both be 0 so we ignore it
@@ -127,9 +121,6 @@ pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
 pub fn observer_longitude(observer_coords: RectangularCoordinates, feature_coords: RectangularCoordinates) -> f64 {
     return (feature_coords.y - observer_coords.y).atan2(feature_coords.x - observer_coords.x).to_degrees().rem_euclid(360.0);
 }
-
-
-
 
 /// A function to search through a range of dates and return subsets of those dates where a certain planetary alignment occurred. 
 /// 
