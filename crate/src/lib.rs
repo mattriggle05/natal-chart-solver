@@ -58,6 +58,20 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 pub fn bisection_derivative_find(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature_id: u8) -> f64{
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
+    const VELOCITY_TOLERANCE: f64 = 1.0_f64;
+    const ONE_MINUTE: f64 = 1.0_f64 / 1440_f64;
+    
+    while left <= right {
+        let midpoint: f64 = (left + right) * 0.5;
+        let midpoint_velocity: f64 = instantaneous_velocity(midpoint, feature_id);
+
+        // we are explcitly search for zero velocity, so just compare directly
+        if midpoint_velocity.abs() <= VELOCITY_TOLERANCE || (left - right) < {
+            return midpoint
+        } else if {
+
+        }
+    }
 }
 
 /// bit manip to check signs, treats +0.0 and -0.0 as their own sign
