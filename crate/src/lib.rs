@@ -4,6 +4,36 @@ use vsop87::*;
 #[wasm_bindgen(start)]
 pub fn main() {}
 
+///
+/// Here's what I have so far for the windows finding algorithm:
+/// 
+/// 1. We start with a single window which is the entire range our function should check, this could be less than 
+/// the total search range if we've divided it up to multiple workers, but we are only concerned with this portion.
+/// 
+/// 2. In that first window, we are going to focus on the first planet, and it's sign that was passed in. I will 
+/// discuss later iterations in later steps.
+/// 
+/// 3. We find the safe step for that planet to avoid stepping over any whole signs or whole retrograde windows, 
+/// then begin.
+/// 
+/// 4. From the beginning of the range, we go step by step, if we step over a sign change, and we detect that, we 
+/// bisect the previous range to find it.
+/// 
+/// 5. The previous step only works if each range is monotonic so as we step over each range, we also check if there 
+/// is a retrograde station in it, if so we split that range into two ranges on either side of the extreme which are
+///  both guaranteed to be monotonic, which we can then check for sign crossings.
+/// 
+/// 6. After detecting all sign changes and stepping through the range, we will have assembled a new list of windows 
+/// that are valid for this planet, then we go back to step 2, but this time instead of the range being the initial 
+/// range, it is now a list of ranges that we operate on, and the planet id index and planet sign index have 
+/// increased by one, then we step through these steps again to refine for that sign.
+/// 
+/// 7. We will have ordered the planets such that the best filters are first, so by the later iterations, we are 
+/// doing very little for each planet.
+/// 
+/// 8. After this we will have windows that have passed checks from all the planets, that we then return and combine 
+/// with results from other workers if any.
+/// 
 #[wasm_bindgen]
 pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
     let mut prev_windows: Vec<(f64, f64)> = Vec::from([(start_julian_date, end_julian_date)]);
@@ -66,12 +96,16 @@ pub fn bisection_derivative_find(start_julian_date: f64, end_julian_date: f64, t
         let midpoint_velocity: f64 = instantaneous_velocity(midpoint, feature_id);
 
         // we are explcitly search for zero velocity, so just compare directly
-        if midpoint_velocity.abs() <= VELOCITY_TOLERANCE || (left - right) < {
+        if midpoint_velocity.abs() <= VELOCITY_TOLERANCE || (left - right) < ONE_MINUTE{
             return midpoint
-        } else if {
-
+        } else if midpoint_velocity < 0.0_f64 {
+            right = midpoint;
+        } else {
+            left = midpoint;
         }
     }
+
+    return (left + right) * 0.5;
 }
 
 /// bit manip to check signs, treats +0.0 and -0.0 as their own sign
@@ -111,7 +145,7 @@ pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target
          }
     }
 
-    return midpoint;
+    return (left + right) * 0.5;
 }
 
 #[inline]
