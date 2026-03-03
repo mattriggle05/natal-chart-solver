@@ -49,7 +49,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
             let mut prev_longitude_valid: bool = (prev_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
             let mut curr_window_start: f64 = prev_longitude;
 
-
             let mut curr_date: f64 = window.0 + COARSE_STEP;
             while curr_date < end_julian_date {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
@@ -65,7 +64,7 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                     let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
                     let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
-
+                    
                 } else {
                     if !prev_longitude_valid && curr_longitude_valid {
                         curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i])
