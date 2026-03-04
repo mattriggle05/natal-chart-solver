@@ -4,37 +4,8 @@ use wasm_bindgen::prelude::*;
 use vsop87::*;
 
 #[wasm_bindgen(start)]
-pub fn main() {}
+pub fn main() {} // required by wasm
 
-/// Here's what I have so far for the windows finding algorithm:
-/// 
-/// 1. We start with a single window which is the entire range our function should check, this could be less than 
-/// the total search range if we've divided it up to multiple workers, but we are only concerned with this portion.
-/// 
-/// 2. In that first window, we are going to focus on the first feature, and it's sign that was passed in. I will 
-/// discuss later iterations in later steps.
-/// 
-/// 3. We find the safe step for that feature to avoid stepping over any whole signs or whole retrograde windows, 
-/// then begin.
-/// 
-/// 4. From the beginning of the range, we go step by step, if we step over a sign change, and we detect that, we 
-/// bisect the previous range to find it.
-/// 
-/// 5. The previous step only works if each range is monotonic so as we step over each range, we also check if there 
-/// is a retrograde station in it, if so we split that range into two ranges on either side of the extreme which are 
-/// both guaranteed to be monotonic, which we can then check for sign crossings.
-/// 
-/// 6. After detecting all sign changes and stepping through the range, we will have assembled a new list of windows 
-/// that are valid for this feature, then we go back to step 2, but this time instead of the range being the initial 
-/// range, it is now a list of ranges that we operate on, and the feature id index and feature sign index have 
-/// increased by one, then we step through these steps again to refine for that sign.
-/// 
-/// 7. We will have ordered the features such that the best filters are first, so by the later iterations, we are 
-/// doing very little for each feature.
-/// 
-/// 8. After this we will have windows that have passed checks from all the features, that we then return and combine 
-/// with results from other workers if any.
-/// 
 #[wasm_bindgen]
 pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
     let mut prev_windows: Vec<(f64, f64)> = Vec::from([(start_julian_date, end_julian_date)]);
@@ -56,21 +27,27 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 
                 let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
 
-                let left_diff: f64 = curr_longitude - prev_longitude;
-                let right_diff: f64 = next_longitude - curr_longitude;
+                let left_avg_velocity: f64 = curr_longitude - prev_longitude;
+                let right_avg_velocity: f64 = next_longitude - curr_longitude;
 
-                if !f64_same_sign(left_diff, right_diff) {
+                
+                if f64_same_sign(left_avg_velocity, right_avg_velocity) {
+                    // same velocity signs means there was no retrograde motion, parse normally
+                    if !prev_longitude_valid && curr_longitude_valid {
+                        // going from invalid to valid means we passed the start of a window...
+                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
+                    } else if prev_longitude_valid && !curr_longitude_valid {
+                        // ...and valid to invalid means we just finished a window
+                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
+                        curr_windows.push( (curr_window_start, window_exit) );
+                    }
+                } else {
+                    // check for retrograde stations, split either side into monotonic ranges for zero finding
                     let station_date: f64 = bisection_derivative_find_zero(curr_date - COARSE_STEP, curr_date + COARSE_STEP, feature_ids[i]);
                     let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
                     let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
-                    
-                } else {
-                    if !prev_longitude_valid && curr_longitude_valid {
-                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i])
-                    } else if prev_longitude_valid && !curr_longitude_valid {
-                        curr_windows.push((curr_window_start, bisection_value_find(curr_date - COARSE_STEP, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i])))
-                    }
+
                 }
 
                 prev_longitude = curr_longitude;
@@ -92,7 +69,7 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f64, feature_id: u8) -> f64{
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
-    let mut reference_velocity: f64 = instantaneous_velocity(left, feature_id);
+    let reference_velocity: f64 = instantaneous_velocity(left, feature_id);
     const VELOCITY_TOLERANCE: f64 = 6e-12_f64; // proportional to the square of the error term in instantaneous_velocity
     const ONE_MINUTE: f64 = 1.0_f64 / 1440_f64;
 
@@ -110,16 +87,6 @@ pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f
             left = midpoint;
         }
     }
-}
-
-/// bit manip to check signs, treats +0.0 and -0.0 as their own sign
-/// in this use case its impossible for a and b to both be 0 so we ignore it
-#[inline(always)]
-pub fn f64_same_sign(a: f64, b: f64) -> bool {
-    let a_bits: u64 = a.to_bits();
-    let b_bits: u64 = b.to_bits();
-    if a_bits << 1 == 0 || b_bits << 1 == 0 { return false; }
-    (a_bits ^ b_bits) >> 63 == 0
 }
 
 /// instantaneous velocity using definition of a derivative
@@ -154,7 +121,6 @@ pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target
 
 #[inline]
 pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
-
     let earth: RectangularCoordinates = vsop87c::earth(julian_date);
     return match feature_id {
         // planets
@@ -173,7 +139,6 @@ pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
     };
 }
 
-
 /// Returns the ecliptic longitude of a feature around a specified observer feature
 /// 
 /// * `observer_coords` - RectangularCoordinates of the feature that is the reference frame of the calculation
@@ -182,6 +147,34 @@ pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
 pub fn longitude_from_observer(observer_coords: RectangularCoordinates, feature_coords: RectangularCoordinates) -> f64 {
     return (feature_coords.y - observer_coords.y).atan2(feature_coords.x - observer_coords.x).to_degrees().rem_euclid(360.0);
 }
+
+/// bit manip to check signs, treats +0.0 and -0.0 as their own sign
+/// in this use case its impossible for a and b to both be 0 so we ignore it
+#[inline(always)]
+pub fn f64_same_sign(a: f64, b: f64) -> bool {
+    let a_bits: u64 = a.to_bits();
+    let b_bits: u64 = b.to_bits();
+    if a_bits << 1 == 0 || b_bits << 1 == 0 { return false; }
+    (a_bits ^ b_bits) >> 63 == 0
+}
+
+
+
+
+
+
+
+
+
+
+// -----------------------------------------------------
+
+// BELOW IS OLD CODE FOR FIRST SEARCH FUNCTION, IGNORE
+
+// -----------------------------------------------------
+
+
+
 
 
 
@@ -248,12 +241,6 @@ pub fn is_valid_date(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8])
 
     return true
 }
-
-
-
-
-
-
 
 
 /// Returns a list of the solar system's planet's ecliptic longitudes at a given date, used to model the system simply in UI
