@@ -18,19 +18,18 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
         for window in prev_windows.iter() {
             let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
             let mut prev_longitude_valid: bool = (prev_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
-            let mut curr_window_start: f64 = prev_longitude;
+            let mut curr_window_start: f64 = prev_longitude; // will always get over written if it isnt an actual window start
 
             let mut curr_date: f64 = window.0 + COARSE_STEP;
             while curr_date < end_julian_date {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
-
                 let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
-
                 let left_avg_velocity: f64 = curr_longitude - prev_longitude;
                 let right_avg_velocity: f64 = next_longitude - curr_longitude;
 
-                
+                // This next section is how we determine where windows start and end
+
                 if f64_same_sign(left_avg_velocity, right_avg_velocity) {
                     // same velocity signs means there was no retrograde motion, parse normally
                     if !prev_longitude_valid && curr_longitude_valid {
@@ -47,8 +46,11 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                     let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
                     let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
-
+                    
                 }
+
+
+
 
                 prev_longitude = curr_longitude;
                 prev_longitude_valid = curr_longitude_valid;
@@ -61,7 +63,16 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
         curr_windows = Vec::new();
     }
 
-    return Vec::new();
+    // TODO: replace original tuple arrays with flat array in the first place
+    // OR
+    // TODO: remap memory at location ot flat array from tuple array (unsafe)
+    let mut flattened_return: Vec<f64> = Vec::with_capacity(prev_windows.len() * 2);
+    for (a, b) in &prev_windows {
+        flattened_return.push(*a);
+        flattened_return.push(*b);
+    }
+
+    return flattened_return;
 }
 
 ///
