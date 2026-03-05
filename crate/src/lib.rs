@@ -48,9 +48,24 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                     let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
                     let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
-                    if prev_longitude_valid && !station_longitude_valid {
-                        //bisect add window
+                    if !rev_longitude_valid && station_longitude_valid {
+                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, station_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
                     }
+
+                    if prev_longitude_valid && !station_longitude_valid {
+                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, station_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
+                        curr_windows.push( (curr_window_start, window_exit) );
+                    }
+
+                    if !station_longitude_valid && curr_longitude_valid {
+                        curr_window_start = bisection_value_find(station_date, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
+                    }
+
+                    if station_longitude_valid && !curr_longitude_valid {
+                        let window_exit: f64 = bisection_value_find(station_date, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
+                        curr_windows.push( (curr_window_start, window_exit) );
+                    }
+
                 } else {
                     // same velocity signs means there was no retrograde motion, parse normally
                     if !prev_longitude_valid && curr_longitude_valid {
