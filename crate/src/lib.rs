@@ -19,18 +19,39 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
             let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
             let mut prev_longitude_valid: bool = (prev_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
             let mut curr_window_start: f64 = prev_longitude; // will always get over written if it isnt an actual window start
+            let mut curr_step_has_station: bool = false;
 
             let mut curr_date: f64 = window.0 + COARSE_STEP;
-            while curr_date < end_julian_date {
+            while curr_date < window.1 {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
                 let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
+
                 let left_avg_velocity: f64 = curr_longitude - prev_longitude;
                 let right_avg_velocity: f64 = next_longitude - curr_longitude;
+                let station_between_now_and_next: bool = f64_same_sign(left_avg_velocity, right_avg_velocity);
+                let mut next_step_has_station: bool = false;
+                
 
-                // This next section is how we determine where windows start and end
+                if !curr_step_has_station && station_between_now_and_next {
+                    let station_date: f64 = bisection_derivative_find_zero(curr_date - COARSE_STEP, curr_date + COARSE_STEP, feature_ids[i]);
+                    if station_date > curr_date {
+                        next_step_has_station = true;
+                    } else {
+                        curr_step_has_station = true;
+                    }
+                }
 
-                if f64_same_sign(left_avg_velocity, right_avg_velocity) {
+                if curr_step_has_station {
+                     // check for retrograde stations, split either side into monotonic ranges for zero finding
+                    let station_date: f64 = bisection_derivative_find_zero(curr_date - COARSE_STEP, curr_date + COARSE_STEP, feature_ids[i]);
+                    let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
+                    let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
+
+                    if prev_longitude_valid && !station_longitude_valid {
+                        //bisect add window
+                    }
+                } else {
                     // same velocity signs means there was no retrograde motion, parse normally
                     if !prev_longitude_valid && curr_longitude_valid {
                         // going from invalid to valid means we passed the start of a window...
@@ -40,20 +61,12 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                         let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
                         curr_windows.push( (curr_window_start, window_exit) );
                     }
-                } else {
-                    // check for retrograde stations, split either side into monotonic ranges for zero finding
-                    let station_date: f64 = bisection_derivative_find_zero(curr_date - COARSE_STEP, curr_date + COARSE_STEP, feature_ids[i]);
-                    let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
-                    let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
-
-                    
                 }
-
-
 
 
                 prev_longitude = curr_longitude;
                 prev_longitude_valid = curr_longitude_valid;
+                curr_step_has_station = next_step_has_station;
                 //curr_longitude = next_longitude;
                 curr_date += COARSE_STEP;
             }
@@ -71,9 +84,9 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
         flattened_return.push(*a);
         flattened_return.push(*b);
     }
-
     return flattened_return;
 }
+
 
 ///
 #[inline(always)]
