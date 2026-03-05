@@ -48,7 +48,7 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
                     let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
                     let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
-                    if !rev_longitude_valid && station_longitude_valid {
+                    if !prev_longitude_valid && station_longitude_valid {
                         curr_window_start = bisection_value_find(curr_date - COARSE_STEP, station_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
                     }
 
