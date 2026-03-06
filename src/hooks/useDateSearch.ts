@@ -34,6 +34,10 @@ export function useDataSearch() {
                 console.log(result)
                 setResults(result);
             }
+
+            if (e.data.type === 'ERROR') {
+                console.error('WASM worker error:', e.data.message);
+            }
         };
 
         return () => workerRef.current?.terminate();

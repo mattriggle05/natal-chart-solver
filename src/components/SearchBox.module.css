@@ -1,4 +1,6 @@
 .result {
     color: white;
     font-size: large;
+    padding-bottom: 0;
+    margin-bottom: 0;
 }
