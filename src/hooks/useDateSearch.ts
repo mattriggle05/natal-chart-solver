@@ -17,6 +17,15 @@ export function useDataSearch() {
             { type: 'module' }
         );
 
+
+        workerRef.current.onerror = (event: ErrorEvent) => {
+            console.error('Worker error:', event.message, event.filename, event.lineno);
+        };
+
+        workerRef.current.addEventListener('messageerror', (event) => {
+            console.error('Worker message error:', event);
+        });
+
         workerRef.current.onmessage = (e) => {
             if (e.data.type === 'complete') {
                 console.log('complete received')
