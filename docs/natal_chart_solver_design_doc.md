@@ -176,10 +176,10 @@ is currently ~69 seconds — negligible for our use case (windows measured in da
 
 ## Rust Functions
 
-### `search2` (primary search function, wasm_bindgen exported)
+### `search` (validated public search function, wasm_bindgen exported)
 ```rust
-pub fn search2(start_julian_date: f64, end_julian_date: f64,
-               feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64>
+pub fn search(start_julian_date: f64, end_julian_date: f64,
+              feature_ids: &[u8], feature_signs: &[u8]) -> Result<Vec<f64>, JsValue>
 ```
 
 **Parameters:**
@@ -187,7 +187,14 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64,
 - `feature_ids`: Planet IDs in the order they should be evaluated (best filter first)
 - `feature_signs`: Corresponding zodiac sign index (0-11) for each planet
 
-**Returns:** Flat-packed `Vec<f64>` of `[window_start_jd, window_end_jd, ...]` pairs
+**Returns:** A flat-packed `Vec<f64>` of `[window_start_jd, window_end_jd, ...]`
+pairs, or a JavaScript error for invalid input.
+
+The public function validates every input and then delegates to
+`search_refined_windows`. This leaves one stable browser contract while allowing the
+internal search algorithm to be replaced later.
+
+### `search_refined_windows` (active internal algorithm)
 
 **Algorithm:**
 1. Starts with one window: the full search range
@@ -325,10 +332,10 @@ Known ~0.36° inaccuracy vs JPL for display purposes only — acceptable.
 
 ---
 
-### `search` (legacy, superseded by `search2`)
+### `search_daily_samples` (legacy reference algorithm)
 The original brute-force search — steps 1 day at a time and checks every day for
-sign membership. Kept for reference but should be removed. No bisection, no window
-refinement, returns individual dates not ranges.
+sign membership. Kept for verification and algorithm comparison. No bisection or window
+refinement, returns individual dates rather than ranges, and is not exported to WASM.
 
 ---
 
@@ -352,7 +359,7 @@ interface SearchParams {
 
 ### Worker: `alignment.worker.ts`
 Initializes WASM once on spawn (cached — subsequent calls are no-ops).
-Calls `search2` with typed arrays constructed from params.
+Calls the validated public `search` function with typed arrays constructed from params.
 Error handling via try/catch with `postMessage({ type: 'ERROR' })`.
 
 ### Component: `SearchBox`
@@ -425,7 +432,7 @@ additional safety margin after the randomized verifier demonstrated that the ear
 ### High Priority
 
 **1. Streaming results back to UI**
-Currently `search2` returns only after full computation. Pass a `js_sys::Function`
+Currently `search` returns only after full computation. Pass a `js_sys::Function`
 callback into the Rust function and call it with each window as it's found. The UI
 can then populate progressively rather than waiting for completion.
 

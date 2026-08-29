@@ -1,4 +1,4 @@
-import init, { search2 } from '@wasm/natal_chart_solver';
+import init, { search } from '@wasm/natal_chart_solver';
 
 const ready = init();
 
@@ -13,7 +13,7 @@ self.onmessage = async (e) => {
 
             console.log({ startJd, endJd, featureIds, featureSigns })
 
-            let result = search2(
+            let result = search(
                 startJd,
                 endJd,
                 new Uint8Array(featureIds),

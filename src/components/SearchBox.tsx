@@ -28,7 +28,7 @@ function formatResults(raw: Float64Array): string {
 function SearchBox() { 
     const { search, results } = useDataSearch();
 
-    const startSearch2 = () => {
+    const startSearch = () => {
         const jde1 = new Date('2005-01-01').getTime() / 86400000.0 + 2440587.5;
         const jde2 = new Date('2006-01-01').getTime() / 86400000.0 + 2440587.5;
         console.log('calling search')
@@ -42,7 +42,7 @@ function SearchBox() {
 
     return <> 
         <p className={styles.result}>{formatResults(results)}</p>
-        <button onClick={startSearch2}>Search2</button>
+        <button onClick={startSearch}>Search</button>
     </>;
 }
 

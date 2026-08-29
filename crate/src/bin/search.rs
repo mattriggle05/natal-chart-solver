@@ -1,4 +1,4 @@
-use natal_chart_solver::search_dates;
+use natal_chart_solver::search;
 
 fn main() {
     let start_julian_date = 2_453_371.5; // 2005-01-01
@@ -6,12 +6,7 @@ fn main() {
     let feature_ids = [10]; // Sun
     let feature_signs = [5]; // Virgo
 
-    let results = search_dates(
-        start_julian_date,
-        end_julian_date,
-        &feature_ids,
-        &feature_signs,
-    );
+    let results = search(start_julian_date, end_julian_date, &feature_ids, &feature_signs).expect("hardcoded search inputs must be valid");
 
     println!("{results:?}");
 }
