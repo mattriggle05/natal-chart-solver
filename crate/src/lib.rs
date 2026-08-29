@@ -417,4 +417,98 @@ mod tests {
             assert!(angular_difference(longitude, 0.0).abs() < 0.001);
         }
     }
+
+    #[test]
+    fn randomized_search_matches_direct_evaluation() {
+        const CASE_COUNT: usize = 100;
+        const MIN_SEARCH_RADIUS_DAYS: f64 = 180.0;
+        const MAX_SEARCH_RADIUS_DAYS: f64 = 1_800.0;
+        const REFERENCE_STEP_DAYS: f64 = 1.0;
+        const REFERENCE_START_JD: f64 = 2_415_020.5; // 1900-01-01
+        const REFERENCE_END_JD: f64 = 2_488_069.5; // 2100-01-01
+        const SUPPORTED_FEATURES: [u8; 8] = [0, 1, 3, 4, 5, 6, 7, 10];
+
+        fn next_random(state: &mut u64) -> u64 {
+            *state ^= *state << 13;
+            *state ^= *state >> 7;
+            *state ^= *state << 17;
+            *state
+        }
+
+        fn date_is_valid(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
+            feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| {
+                let longitude = geocentric_longitude(julian_date, feature_id);
+                (longitude / 30.0) as u8 == feature_sign
+            })
+        }
+
+        fn date_is_in_results(julian_date: f64, results: &[f64]) -> bool {
+            results
+                .chunks_exact(2)
+                .any(|window| julian_date >= window[0] && julian_date <= window[1])
+        }
+
+        let mut random_state = 0x4e41_5441_4c43_4841_u64;
+
+        for case_index in 0..CASE_COUNT {
+            let random_fraction = next_random(&mut random_state) as f64 / u64::MAX as f64;
+            let selected_date = REFERENCE_START_JD
+                + MAX_SEARCH_RADIUS_DAYS
+                + random_fraction
+                    * (REFERENCE_END_JD - REFERENCE_START_JD - 2.0 * MAX_SEARCH_RADIUS_DAYS);
+            let radius_fraction = next_random(&mut random_state) as f64 / u64::MAX as f64;
+            let search_radius = MIN_SEARCH_RADIUS_DAYS
+                + radius_fraction * (MAX_SEARCH_RADIUS_DAYS - MIN_SEARCH_RADIUS_DAYS);
+            let search_start = selected_date - search_radius;
+            let search_end = selected_date + search_radius;
+
+            let mut shuffled_features = SUPPORTED_FEATURES;
+            for index in (1..shuffled_features.len()).rev() {
+                let swap_index = next_random(&mut random_state) as usize % (index + 1);
+                shuffled_features.swap(index, swap_index);
+            }
+
+            let feature_count = next_random(&mut random_state) as usize % SUPPORTED_FEATURES.len() + 1;
+            let feature_ids = &shuffled_features[..feature_count];
+            let feature_signs: Vec<u8> = feature_ids
+                .iter()
+                .map(|&feature_id| (geocentric_longitude(selected_date, feature_id) / 30.0) as u8)
+                .collect();
+
+            let results = search_dates(search_start, search_end, feature_ids, &feature_signs);
+            let context = format!(
+                "case={case_index}, selected_date={selected_date}, search=[{search_start}, {search_end}], feature_ids={feature_ids:?}, feature_signs={feature_signs:?}, results={results:?}"
+            );
+
+            assert_eq!(results.len() % 2, 0, "result array must contain pairs; {context}");
+
+            let mut previous_end = None;
+            for window in results.chunks_exact(2) {
+                let start = window[0];
+                let end = window[1];
+                assert!(start < end, "window must have positive length; {context}");
+                assert!(start >= search_start && end <= search_end, "window must stay inside the requested range; {context}");
+                if let Some(previous_end) = previous_end {
+                    assert!(start >= previous_end, "windows must be sorted and nonoverlapping; {context}");
+                }
+                previous_end = Some(end);
+            }
+
+            assert!(
+                date_is_in_results(selected_date, &results),
+                "the generated source date must be returned; {context}"
+            );
+
+            let mut reference_date = search_start;
+            while reference_date <= search_end {
+                let expected = date_is_valid(reference_date, feature_ids, &feature_signs);
+                let actual = date_is_in_results(reference_date, &results);
+                assert_eq!(
+                    actual, expected,
+                    "optimized result disagrees with direct sign evaluation at julian_date={reference_date}; {context}"
+                );
+                reference_date += REFERENCE_STEP_DAYS;
+            }
+        }
+    }
 }
