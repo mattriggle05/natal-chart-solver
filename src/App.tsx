@@ -2,7 +2,6 @@ import { useState } from 'react';
 import SolarSystem from './components/SolarSystem';
 import SearchBox from './components/SearchBox';
 import styles from './App.module.css';
-// import clsx from 'clsx';
 
 
 function App() {

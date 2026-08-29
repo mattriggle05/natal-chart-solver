@@ -59,14 +59,14 @@ This checklist defines the work required for Natal Chart Solver to be considered
 ### Rust/WASM API and maintainability
 
 - [x] Replace `search2` with a stable, clearly named public search API.
-- [x] Rename the superseded daily-sampling search and remove it from the public WASM API.
+- [x] Remove the superseded daily-sampling search implementation.
 - [ ] Break `crate/src/lib.rs` into focused modules for coordinates, bodies, search, roots, dates, and WASM bindings.
 - [ ] Add typed request, result, progress, cancellation, and error contracts across the worker boundary.
 - [ ] Ensure WASM initialization failures are surfaced to the UI.
 - [ ] Add Rust documentation for public functions and non-obvious numerical assumptions.
 - [ ] Add package description, repository, and license metadata to `Cargo.toml`.
 - [ ] Decide whether panic-hook and `js-sys` dependencies are needed, then align `Cargo.toml` with the design documentation.
-- [ ] Remove the unused `astronomy-engine` dependency unless it becomes part of verification or production behavior.
+- [x] Remove the unused `astronomy-engine` dependency.
 - [ ] Pin and document supported Node, npm, Rust, wasm-pack, and wasm target versions.
 - [ ] Add a version-manager file such as `.nvmrc` so Vite always runs on a supported Node version.
 

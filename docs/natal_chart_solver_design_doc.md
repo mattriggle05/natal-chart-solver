@@ -332,13 +332,6 @@ Known ~0.36° inaccuracy vs JPL for display purposes only — acceptable.
 
 ---
 
-### `search_daily_samples` (legacy reference algorithm)
-The original brute-force search — steps 1 day at a time and checks every day for
-sign membership. Kept for verification and algorithm comparison. No bisection or window
-refinement, returns individual dates rather than ranges, and is not exported to WASM.
-
----
-
 ## TypeScript / React
 
 ### Custom Hook: `useDateSearch`
@@ -507,14 +500,10 @@ natal chart position rather than selecting a sign from a dropdown.
 ```toml
 wasm-bindgen = "0.2"
 vsop87 = "2.1"
-console_error_panic_hook = "0.1"  # Rust panic messages in browser console
-js-sys = "0.3"                    # For callback support (streaming — not yet implemented)
-web-sys = { version = "0.3", features = ["console"] }  # console.log from Rust
 ```
 
 ### TypeScript (package.json)
 ```json
-"astronomy-engine": "^2.1.19"  # Installed but superseded by Rust WASM — can be removed
 "clsx": "^2.1.1"
 "react": "^19.2.4"
 "react-dom": "^19.2.4"
