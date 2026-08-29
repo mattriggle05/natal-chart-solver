@@ -17,7 +17,7 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
     const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64; // calculated at compile time
 
     for i in 0..feature_ids.len() {
-        const COARSE_STEP: f64 = 1.0;
+        let coarse_step = coarse_step_for_feature(feature_ids[i]);
 
         for window in prev_windows.iter() {
             let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
@@ -25,11 +25,11 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
             let mut curr_window_start: f64 = window.0; // will always get over written if it isnt an actual window start
             let mut curr_step_has_station: bool = false;
 
-            let mut curr_date: f64 = window.0 + COARSE_STEP;
+            let mut curr_date: f64 = window.0 + coarse_step;
             while curr_date < window.1 {
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
-                let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
+                let next_longitude: f64 = geocentric_longitude(curr_date + coarse_step, feature_ids[i]);
 
                 let left_avg_velocity: f64 = angular_difference(curr_longitude, prev_longitude);
                 let right_avg_velocity: f64 = angular_difference(next_longitude, curr_longitude);
@@ -38,7 +38,7 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
                 
 
                 if !curr_step_has_station && station_between_now_and_next {
-                    let station_date: f64 = bisection_derivative_find_zero(curr_date - COARSE_STEP, curr_date + COARSE_STEP, feature_ids[i]);
+                    let station_date: f64 = bisection_derivative_find_zero(curr_date - coarse_step, curr_date + coarse_step, feature_ids[i]);
                     if station_date > curr_date {
                         next_step_has_station = true;
                     } else {
@@ -48,7 +48,7 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
 
                 if curr_step_has_station {
                      // check for retrograde stations, split either side into monotonic ranges for zero finding
-                    let station_date: f64 = bisection_derivative_find_zero(curr_date - COARSE_STEP, curr_date + COARSE_STEP, feature_ids[i]);
+                    let station_date: f64 = bisection_derivative_find_zero(curr_date - coarse_step, curr_date + coarse_step, feature_ids[i]);
                     let station_longitude: f64 = geocentric_longitude(station_date, feature_ids[i]);
                     let station_longitude_valid: bool = (station_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
 
@@ -56,12 +56,12 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
                     // this is messy an bad, but it should be the correct functionality, so were gonna use it to test.
                     if !prev_longitude_valid && station_longitude_valid {
                         let target = sign_boundary_between(prev_longitude, station_longitude);
-                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, station_date, target, feature_ids[i]);
+                        curr_window_start = bisection_value_find(curr_date - coarse_step, station_date, target, feature_ids[i]);
                     }
 
                     if prev_longitude_valid && !station_longitude_valid {
                         let target = sign_boundary_between(prev_longitude, station_longitude);
-                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, station_date, target, feature_ids[i]);
+                        let window_exit: f64 = bisection_value_find(curr_date - coarse_step, station_date, target, feature_ids[i]);
                         curr_windows.push( (curr_window_start, window_exit) );
                     }
 
@@ -81,11 +81,11 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
                     if !prev_longitude_valid && curr_longitude_valid {
                         // going from invalid to valid means we passed the start of a window...
                         let target = sign_boundary_between(prev_longitude, curr_longitude);
-                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, target, feature_ids[i]);
+                        curr_window_start = bisection_value_find(curr_date - coarse_step, curr_date, target, feature_ids[i]);
                     } else if prev_longitude_valid && !curr_longitude_valid {
                         // ...and valid to invalid means we just finished a window
                         let target = sign_boundary_between(prev_longitude, curr_longitude);
-                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, curr_date, target, feature_ids[i]);
+                        let window_exit: f64 = bisection_value_find(curr_date - coarse_step, curr_date, target, feature_ids[i]);
                         curr_windows.push( (curr_window_start, window_exit) );
                     }
                 }
@@ -95,7 +95,7 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
                 prev_longitude_valid = curr_longitude_valid;
                 curr_step_has_station = next_step_has_station;
                 //curr_longitude = next_longitude;
-                curr_date += COARSE_STEP;
+                curr_date += coarse_step;
             }
         }
 
@@ -112,6 +112,23 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
         flattened_return.push(*b);
     }
     return flattened_return;
+}
+
+/// Returns a conservative search step in days for each supported feature.
+/// Steps are bounded by sign-crossing speed and minimum retrograde duration.
+#[inline(always)]
+pub fn coarse_step_for_feature(feature_id: u8) -> f64 {
+    match feature_id {
+        0 => 7.3,   // Mercury
+        1 => 24.0,  // Venus
+        3 => 43.0,  // Mars
+        4 => 120.0, // Jupiter
+        5 => 135.0, // Saturn
+        6 => 150.0, // Uranus
+        7 => 156.0, // Neptune
+        10 => 14.7, // Sun
+        _ => 1.0,   // Preserve conservative behavior until input validation rejects unsupported IDs.
+    }
 }
 
 
@@ -349,6 +366,20 @@ mod tests {
     fn identifies_zero_boundary_in_both_directions() {
         assert_eq!(sign_boundary_between(359.0, 1.0), 0.0);
         assert_eq!(sign_boundary_between(1.0, 359.0), 0.0);
+    }
+
+    #[test]
+    fn uses_safe_coarse_step_for_each_supported_feature() {
+        assert_eq!(coarse_step_for_feature(0), 7.3);
+        assert_eq!(coarse_step_for_feature(1), 24.0);
+        assert_eq!(coarse_step_for_feature(3), 43.0);
+        assert_eq!(coarse_step_for_feature(4), 120.0);
+        assert_eq!(coarse_step_for_feature(5), 135.0);
+        assert_eq!(coarse_step_for_feature(6), 150.0);
+        assert_eq!(coarse_step_for_feature(7), 156.0);
+        assert_eq!(coarse_step_for_feature(10), 14.7);
+        assert_eq!(coarse_step_for_feature(2), 1.0);
+        assert_eq!(coarse_step_for_feature(255), 1.0);
     }
 
     #[test]
