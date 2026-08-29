@@ -1,7 +1,5 @@
 use std::f64::NAN;
 
-use web_sys::console;
-
 use wasm_bindgen::prelude::*;
 use vsop87::*;
 
@@ -10,16 +8,16 @@ pub fn main() {} // required by wasm
 
 #[wasm_bindgen]
 pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
-    console::log_1(&format!("called search with: start_julian_date: {}, end_julian_date: {}", start_julian_date, end_julian_date).into());
+    search_dates(start_julian_date, end_julian_date, feature_ids, feature_signs)
+}
 
+pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
     let mut prev_windows: Vec<(f64, f64)> = Vec::from([(start_julian_date, end_julian_date)]);
     let mut curr_windows: Vec<(f64, f64)> = Vec::new();
     const DIVIDE_BY_30: f64 = 1.0_f64 / 30.0_f64; // calculated at compile time
 
     for i in 0..feature_ids.len() {
         const COARSE_STEP: f64 = 1.0;
-
-        console::log_1(&format!("process nth feature: {}", i).into());
 
         for window in prev_windows.iter() {
             let mut prev_longitude: f64 = geocentric_longitude(window.0, feature_ids[i]);
@@ -29,7 +27,6 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
 
             let mut curr_date: f64 = window.0 + COARSE_STEP;
             while curr_date < window.1 {
-                console::log_1(&format!("step: {}", curr_date).into());
                 let curr_longitude: f64 = geocentric_longitude(curr_date, feature_ids[i]);
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
                 let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);

@@ -44,7 +44,7 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [ ] Replace the fixed one-day coarse step with verified per-body safe step sizes.
 - [ ] Automatically order filters by expected selectivity and computation cost.
 - [ ] Use the Sun as the first filter when it is included and verify that reordering cannot change results.
-- [ ] Remove per-step Rust console logging from production builds.
+- [x] Remove per-step Rust console logging from production builds.
 - [ ] Benchmark single-body and multi-body searches over representative 1-, 10-, 100-, and 1,000-year ranges.
 - [ ] Define acceptable search latency and memory limits for supported devices.
 - [ ] Add progressive result delivery or progress reporting for long searches.
