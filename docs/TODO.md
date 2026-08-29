@@ -14,8 +14,8 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [ ] Correctly preserve a matching window that begins at the start of the requested search range.
 - [ ] Correctly append a matching window that remains open at the end of the requested search range.
 - [ ] Handle exact sign-boundary timestamps consistently.
-- [ ] Normalize angular differences across the 0°/360° boundary.
-- [ ] Correctly detect Pisces-to-Aries and Aries-to-Pisces transitions in both prograde and retrograde motion.
+- [x] Normalize angular differences across the 0°/360° boundary.
+- [x] Correctly detect Pisces-to-Aries and Aries-to-Pisces transitions in both prograde and retrograde motion.
 - [ ] Replace average-displacement station detection with instantaneous angular velocity.
 - [ ] Ensure station bracketing works when a station lies exactly on a coarse-sample timestamp.
 - [ ] Split search ranges into provably monotonic intervals around retrograde stations.

@@ -31,8 +31,8 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
                 let curr_longitude_valid: bool = (curr_longitude * DIVIDE_BY_30) as u8 == feature_signs[i];
                 let next_longitude: f64 = geocentric_longitude(curr_date + COARSE_STEP, feature_ids[i]);
 
-                let left_avg_velocity: f64 = curr_longitude - prev_longitude;
-                let right_avg_velocity: f64 = next_longitude - curr_longitude;
+                let left_avg_velocity: f64 = angular_difference(curr_longitude, prev_longitude);
+                let right_avg_velocity: f64 = angular_difference(next_longitude, curr_longitude);
                 let station_between_now_and_next: bool = !f64_same_sign(left_avg_velocity, right_avg_velocity);
                 let mut next_step_has_station: bool = false;
                 
@@ -55,20 +55,24 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
 
                     // this is messy an bad, but it should be the correct functionality, so were gonna use it to test.
                     if !prev_longitude_valid && station_longitude_valid {
-                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, station_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
+                        let target = sign_boundary_between(prev_longitude, station_longitude);
+                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, station_date, target, feature_ids[i]);
                     }
 
                     if prev_longitude_valid && !station_longitude_valid {
-                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, station_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
+                        let target = sign_boundary_between(prev_longitude, station_longitude);
+                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, station_date, target, feature_ids[i]);
                         curr_windows.push( (curr_window_start, window_exit) );
                     }
 
                     if !station_longitude_valid && curr_longitude_valid {
-                        curr_window_start = bisection_value_find(station_date, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
+                        let target = sign_boundary_between(station_longitude, curr_longitude);
+                        curr_window_start = bisection_value_find(station_date, curr_date, target, feature_ids[i]);
                     }
 
                     if station_longitude_valid && !curr_longitude_valid {
-                        let window_exit: f64 = bisection_value_find(station_date, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
+                        let target = sign_boundary_between(station_longitude, curr_longitude);
+                        let window_exit: f64 = bisection_value_find(station_date, curr_date, target, feature_ids[i]);
                         curr_windows.push( (curr_window_start, window_exit) );
                     }
 
@@ -76,10 +80,12 @@ pub fn search_dates(start_julian_date: f64, end_julian_date: f64, feature_ids: &
                     // same velocity signs means there was no retrograde motion, parse normally
                     if !prev_longitude_valid && curr_longitude_valid {
                         // going from invalid to valid means we passed the start of a window...
-                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, (feature_signs[i] as f64)*30.0, feature_ids[i]);
+                        let target = sign_boundary_between(prev_longitude, curr_longitude);
+                        curr_window_start = bisection_value_find(curr_date - COARSE_STEP, curr_date, target, feature_ids[i]);
                     } else if prev_longitude_valid && !curr_longitude_valid {
                         // ...and valid to invalid means we just finished a window
-                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, curr_date, ((feature_signs[i]+1) as f64)*30.0, feature_ids[i]);
+                        let target = sign_boundary_between(prev_longitude, curr_longitude);
+                        let window_exit: f64 = bisection_value_find(curr_date - COARSE_STEP, curr_date, target, feature_ids[i]);
                         curr_windows.push( (curr_window_start, window_exit) );
                     }
                 }
@@ -140,27 +146,50 @@ pub fn instantaneous_velocity(julian_date: f64, feature_id: u8) -> f64{
     const DERIVATIVE_STEP: f64 = 6e-6_f64; // equivalent to the cube root of f64::EPSILON, for error stuff
     const DOUBLE_DERIVATIVE_STEP: f64 = 1.2e-5_f64; 
 
-    return (geocentric_longitude(julian_date + DERIVATIVE_STEP, feature_id) - geocentric_longitude(julian_date - DERIVATIVE_STEP, feature_id)) / DOUBLE_DERIVATIVE_STEP
+    let before = geocentric_longitude(julian_date - DERIVATIVE_STEP, feature_id);
+    let after = geocentric_longitude(julian_date + DERIVATIVE_STEP, feature_id);
+    return angular_difference(after, before) / DOUBLE_DERIVATIVE_STEP
 }
 
 ///
 pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature_id: u8) -> f64 {
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
+    let mut left_error = angular_difference(geocentric_longitude(left, feature_id), target_value);
     const LONGITUDE_TOLERANCE: f64 = 1.0_f64 / 3600.0_f64; // 1 arcsecond accuracy for VSOP87C
     const ONE_MINUTE: f64 = 1.0_f64 / 1440_f64;
 
     loop {
         let midpoint: f64 = (left + right) * 0.5;
         let midpoint_longitude: f64 = geocentric_longitude(midpoint, feature_id);
+        let midpoint_error = angular_difference(midpoint_longitude, target_value);
 
-        if (midpoint_longitude - target_value).abs() < LONGITUDE_TOLERANCE || (right - left) < ONE_MINUTE {
+        if midpoint_error.abs() < LONGITUDE_TOLERANCE || (right - left) < ONE_MINUTE {
             return midpoint;
-        } else if midpoint_longitude < target_value {
+        } else if f64_same_sign(left_error, midpoint_error) {
             left = midpoint;
-         } else {
+            left_error = midpoint_error;
+        } else {
             right = midpoint;
-         }
+        }
+    }
+}
+
+/// Returns the shortest signed angular displacement from `from` to `to` in
+/// the half-open interval [-180°, 180°).
+#[inline(always)]
+pub fn angular_difference(to: f64, from: f64) -> f64 {
+    (to - from + 180.0).rem_euclid(360.0) - 180.0
+}
+
+/// Returns the zodiac boundary crossed while moving from `start_longitude`
+/// to `end_longitude`. Callers must provide a step containing one boundary at most.
+#[inline(always)]
+pub fn sign_boundary_between(start_longitude: f64, end_longitude: f64) -> f64 {
+    if angular_difference(end_longitude, start_longitude) > 0.0 {
+        ((start_longitude / 30.0).floor() + 1.0).rem_euclid(12.0) * 30.0
+    } else {
+        (start_longitude / 30.0).floor() * 30.0
     }
 }
 
@@ -303,4 +332,58 @@ pub fn system_model_at_date(julian_date: f64) -> Vec<f64> {
         vsop87d::uranus(julian_date).longitude().to_degrees().rem_euclid(360.0),
         vsop87d::neptune(julian_date).longitude().to_degrees().rem_euclid(360.0)
     ]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn angular_difference_wraps_across_zero() {
+        assert_eq!(angular_difference(1.0, 359.0), 2.0);
+        assert_eq!(angular_difference(359.0, 1.0), -2.0);
+        assert_eq!(angular_difference(0.0, 360.0), 0.0);
+    }
+
+    #[test]
+    fn identifies_zero_boundary_in_both_directions() {
+        assert_eq!(sign_boundary_between(359.0, 1.0), 0.0);
+        assert_eq!(sign_boundary_between(1.0, 359.0), 0.0);
+    }
+
+    #[test]
+    fn refines_prograde_and_retrograde_zero_crossings() {
+        let mut previous_date = 2_451_544.5; // 2000-01-01
+        let mut previous_longitude = geocentric_longitude(previous_date, 0); // Mercury
+        let mut prograde_crossing = None;
+        let mut retrograde_crossing = None;
+
+        for day in 1..=(365 * 50) {
+            let current_date = 2_451_544.5 + day as f64;
+            let current_longitude = geocentric_longitude(current_date, 0);
+            let displacement = angular_difference(current_longitude, previous_longitude);
+
+            if previous_longitude > 330.0 && current_longitude < 30.0 && displacement > 0.0 {
+                prograde_crossing = Some((previous_date, current_date));
+            }
+
+            if previous_longitude < 30.0 && current_longitude > 330.0 && displacement < 0.0 {
+                retrograde_crossing = Some((previous_date, current_date));
+            }
+
+            if prograde_crossing.is_some() && retrograde_crossing.is_some() {
+                break;
+            }
+
+            previous_date = current_date;
+            previous_longitude = current_longitude;
+        }
+
+        for crossing_range in [prograde_crossing, retrograde_crossing] {
+            let (start, end) = crossing_range.expect("expected Mercury to cross 0° in both directions");
+            let crossing = bisection_value_find(start, end, 0.0, 0);
+            let longitude = geocentric_longitude(crossing, 0);
+            assert!(angular_difference(longitude, 0.0).abs() < 0.001);
+        }
+    }
 }
