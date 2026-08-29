@@ -193,35 +193,31 @@ pub fn search2(start_julian_date: f64, end_julian_date: f64,
 1. Starts with one window: the full search range
 2. For each planet in order:
    - For each current candidate window:
-     - Coarse sweep at `COARSE_STEP` (currently 1.0 day — see Future Work)
+     - Coarse sweep using a conservative per-body step
      - At each step: compute current longitude, check sign membership
-     - Detect retrograde stations via average velocity sign change
+     - Detect retrograde stations via instantaneous velocity sign changes
      - On detected station: bisect to find precise station time
+     - Split the step into monotonic segments around the station
      - On sign boundary crossing: bisect to find precise crossing time
      - Accumulate sub-windows where this planet is in the correct sign
    - Replace window list with new sub-windows
 3. Return final intersected windows
 
 **Known issues / incomplete areas:**
-- `COARSE_STEP` is hardcoded to 1.0 day — should be per-planet based on safe step
-  sizes derived from minimum retrograde duration and maximum angular velocity
-- Station detection uses average velocity (curr - prev) rather than instantaneous
-  velocity — discussed at length, the correct fix is to use `instantaneous_velocity()`
-  at each step for sign detection, not just for bisection
-- Wraparound at 0°/360° boundary not explicitly handled in sign transition detection
-- Window boundaries use half-open interval convention inconsistently
+- Search input validation and structured errors are not implemented
+- Exact boundary inclusion semantics still need to be formalized across the public API
 - No streaming/callback — returns all results at once after full computation
 
-**Current COARSE_STEP should be (per planet):**
+**Current conservative coarse steps (per planet):**
 ```
-Sun:     14.7 days  (first filter — use as primary coarse step)
-Mercury: 16 days    (angular velocity bound dominates)
-Venus:   24 days
-Mars:    43 days
-Jupiter: 120 days
-Saturn:  135 days
-Uranus:  150 days
-Neptune: 156 days
+Sun:     14 days
+Mercury: 3.5 days
+Venus:   12 days
+Mars:    18 days
+Jupiter: 60 days
+Saturn:  67 days
+Uranus:  75 days
+Neptune: 78 days
 ```
 
 ---
@@ -385,21 +381,18 @@ Implementation should be straightforward using the argmin crate source as refere
 The fundamental challenge: no finite step size can guarantee finding an arbitrarily
 small angular excursion caused by retrograde motion crossing a sign boundary briefly.
 
-**The correct solution (partially implemented):**
+**Implemented solution:**
 1. Use `instantaneous_velocity()` at each coarse step — not average velocity
 2. When velocity sign changes between steps, bisect to find the exact station time
 3. This is guaranteed correct because planetary retrogrades have a physical minimum
    duration governed by orbital mechanics — the minimum retrograde duration sets the
    safe step size, not an arbitrary choice
 
-**Current implementation uses average velocity** (curr_lon - prev_lon) which has the
-aliasing problem described below — only partially correct.
-
-### The Aliasing Problem (Known Issue)
+### The Aliasing Problem
 Using `curr_lon - prev_lon` as a velocity proxy can give the wrong sign when a station
 occurs near the end of a step (the planet slows, turns, but hasn't traveled back far
-enough to make the net displacement negative). The correct fix is to use
-`instantaneous_velocity()` for detection, not just for bisection.
+enough to make the net displacement negative). The implementation avoids this by using
+`instantaneous_velocity()` at both ends of each coarse segment.
 
 ### Monotonic Interval Guarantee
 Between any two consecutive retrograde stations, a planet's geocentric longitude is
@@ -408,25 +401,22 @@ making bisection provably correct (by the Intermediate Value Theorem). The algor
 partitions time into monotonic intervals using station times as breakpoints.
 
 ### Safe Step Sizes
-Governed by the minimum of two constraints:
-1. `30° / max_angular_velocity` — guarantees no sign is skipped entirely
-2. `min_retrograde_duration` — guarantees no retrograde station is skipped
+The step must be short enough that one monotonic segment cannot pass completely through
+a 30° sign without either endpoint landing inside it. It must also be short enough that
+two stations cannot occur inside one sampled segment. The current implementation uses
+additional safety margin after the randomized verifier demonstrated that the earlier
+43-day Mars estimate could skip a complete Aries interval.
 
-The minimum of these two values for each planet:
-
-| Planet | Max °/day | 30°/max | Min retrograde | Safe step |
-|--------|-----------|---------|----------------|-----------|
-| Sun    | 1.02      | 14.7d   | N/A (no retro) | 14.7d     |
-| Mercury| 4.09      | 7.3d    | 21d            | 7.3d      |
-| Venus  | 1.25      | 24d     | 40d            | 24d       |
-| Mars   | 0.7       | 43d     | 60d            | 43d       |
-| Jupiter| 0.24      | 125d    | 120d           | 120d      |
-| Saturn | 0.13      | 230d    | 135d           | 135d      |
-| Uranus | 0.04      | 750d    | 150d           | 150d      |
-| Neptune| 0.015     | 2000d   | 156d           | 156d      |
-
-**Currently ignored** — COARSE_STEP is hardcoded to 1.0 for all planets. This is the
-most impactful pending optimization.
+| Planet | Current step |
+|--------|--------------|
+| Sun    | 14d          |
+| Mercury| 3.5d         |
+| Venus  | 12d          |
+| Mars   | 18d          |
+| Jupiter| 60d          |
+| Saturn | 67d          |
+| Uranus | 75d          |
+| Neptune| 78d          |
 
 ---
 
@@ -434,30 +424,15 @@ most impactful pending optimization.
 
 ### High Priority
 
-**1. Per-planet safe step sizes**
-Replace hardcoded `COARSE_STEP = 1.0` with per-planet values from the table above.
-Expected speedup: 10-100x depending on planets searched.
-
-**2. Instantaneous velocity for station detection**
-Replace `curr_longitude - prev_longitude` with `instantaneous_velocity()` in the
-coarse sweep. This fixes the aliasing problem and makes station detection provably
-correct.
-
-**3. Streaming results back to UI**
+**1. Streaming results back to UI**
 Currently `search2` returns only after full computation. Pass a `js_sys::Function`
 callback into the Rust function and call it with each window as it's found. The UI
 can then populate progressively rather than waiting for completion.
 
-**4. Sun as first filter**
+**2. Sun as first filter**
 The Sun never retrogrades and is cheapest to calculate. It should always be the first
 planet evaluated regardless of user input order, collapsing the search space by ~92%
 before any other planet is checked.
-
-**5. 0°/360° wraparound handling**
-Sign boundary detection doesn't handle the Pisces/Aries boundary (359°→1° or reverse)
-correctly. The raw longitude difference appears as ~-358° instead of +2°, which would
-be misread as a large retrograde. Needs explicit wraparound in the velocity calculation
-and boundary crossing detection.
 
 ### Medium Priority
 
@@ -516,14 +491,6 @@ natal chart position rather than selecting a sign from a dropdown.
 
 1. **`system_model_at_date` heliocentric longitudes ~0.36° off JPL** — believed to be
    a vsop87d crate issue. Display only, acceptable.
-
-2. **`search2` may not correctly handle the case where a planet is in the target sign
-   at the very start or end of the search range** — window boundary conditions need
-   review.
-
-3. **Average velocity aliasing** — station detection can place the bisection interval
-   one step off from where the actual station occurred. In most cases this still
-   converges to the right answer but is not provably correct.
 
 ---
 

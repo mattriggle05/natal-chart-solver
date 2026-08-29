@@ -11,15 +11,15 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [ ] Validate that `feature_ids` and `feature_signs` have equal, nonzero lengths.
 - [ ] Validate every feature ID and zodiac-sign ID before starting a search.
 - [ ] Return structured errors to TypeScript instead of `NaN`, panics, or silently empty results.
-- [ ] Correctly preserve a matching window that begins at the start of the requested search range.
-- [ ] Correctly append a matching window that remains open at the end of the requested search range.
+- [x] Correctly preserve a matching window that begins at the start of the requested search range.
+- [x] Correctly append a matching window that remains open at the end of the requested search range.
 - [ ] Handle exact sign-boundary timestamps consistently.
 - [x] Normalize angular differences across the 0°/360° boundary.
 - [x] Correctly detect Pisces-to-Aries and Aries-to-Pisces transitions in both prograde and retrograde motion.
-- [ ] Replace average-displacement station detection with instantaneous angular velocity.
-- [ ] Ensure station bracketing works when a station lies exactly on a coarse-sample timestamp.
-- [ ] Split search ranges into provably monotonic intervals around retrograde stations.
-- [ ] Make longitude boundary refinement work for both increasing and decreasing longitude.
+- [x] Replace average-displacement station detection with instantaneous angular velocity.
+- [x] Ensure station bracketing works when a station lies exactly on a coarse-sample timestamp.
+- [x] Split search ranges into provably monotonic intervals around retrograde stations.
+- [x] Make longitude boundary refinement work for both increasing and decreasing longitude.
 - [ ] Verify that multiple sign entries during one retrograde cycle produce separate, ordered windows.
 - [ ] Merge adjacent or numerically overlapping result windows where appropriate.
 - [ ] Guarantee sorted, nonoverlapping results for every valid search.
@@ -77,8 +77,8 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [ ] Add tests for stations, exact boundaries, range endpoints, and 0°/360° wraparound.
 - [ ] Add tests for malformed arrays, invalid IDs, invalid signs, reversed ranges, and non-finite values.
 - [ ] Add golden-data tests using authoritative ephemeris values.
-- [ ] Add property tests asserting sorted, nonoverlapping windows whose sampled interiors satisfy all requested signs.
-- [ ] Compare optimized search results against a small-step brute-force reference implementation.
+- [x] Add property tests asserting sorted, nonoverlapping windows whose sampled interiors satisfy all requested signs.
+- [x] Compare optimized search results against a small-step brute-force reference implementation.
 - [ ] Add TypeScript tests for Julian-date conversion and result formatting.
 - [ ] Add worker integration tests covering success, error, cancellation, and stale responses.
 - [ ] Add end-to-end tests for representative user searches.
