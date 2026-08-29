@@ -3,6 +3,10 @@ use std::f64::NAN;
 use wasm_bindgen::prelude::*;
 use vsop87::*;
 
+const VELOCITY_TOLERANCE: f64 = 6e-12;
+const ONE_MINUTE: f64 = 1.0 / 1440.0;
+
+/// Returns flattened Julian-date window pairs using `[start, end)` semantics.
 #[wasm_bindgen]
 pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Result<Vec<f64>, JsValue> {
     validate_search_inputs(start_julian_date, end_julian_date, feature_ids, feature_signs).map_err(JsValue::from_str)?;
@@ -43,6 +47,7 @@ fn search_refined_windows(start_julian_date: f64, end_julian_date: f64, feature_
         for &(window_start, window_end) in &prev_windows {
             filter_window_for_feature(window_start, window_end, feature_ids[i], feature_signs[i], &mut curr_windows);
         }
+        merge_adjacent_or_overlapping_windows(&mut curr_windows);
         prev_windows = curr_windows;
     }
 
@@ -52,6 +57,22 @@ fn search_refined_windows(start_julian_date: f64, end_julian_date: f64, feature_
         flattened_return.push(*b);
     }
     return flattened_return;
+}
+
+fn merge_adjacent_or_overlapping_windows(windows: &mut Vec<(f64, f64)>) {
+    if windows.len() < 2 { return; }
+
+    let mut write_index = 0;
+    for read_index in 1..windows.len() {
+        let (start, end) = windows[read_index];
+        if start <= windows[write_index].1 {
+            windows[write_index].1 = windows[write_index].1.max(end);
+        } else {
+            write_index += 1;
+            windows[write_index] = (start, end);
+        }
+    }
+    windows.truncate(write_index + 1);
 }
 
 fn filter_window_for_feature(window_start: f64, window_end: f64, feature_id: u8, feature_sign: u8, output: &mut Vec<(f64, f64)>) {
@@ -92,7 +113,6 @@ fn filter_window_for_feature(window_start: f64, window_end: f64, feature_id: u8,
 
 #[inline(always)]
 fn segment_has_interior_station(start_velocity: f64, end_velocity: f64) -> bool {
-    const VELOCITY_TOLERANCE: f64 = 6e-12;
     start_velocity.abs() > VELOCITY_TOLERANCE
         && end_velocity.abs() > VELOCITY_TOLERANCE
         && !f64_same_sign(start_velocity, end_velocity)
@@ -157,8 +177,8 @@ pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
     let reference_velocity: f64 = instantaneous_velocity(left, feature_id);
-    const VELOCITY_TOLERANCE: f64 = 6e-12_f64; // proportional to the square of the error term in instantaneous_velocity
-    const ONE_MINUTE: f64 = 1.0_f64 / 1440_f64;
+    if reference_velocity == 0.0 { return left; }
+    if instantaneous_velocity(right, feature_id) == 0.0 { return right; }
 
     loop {
         let midpoint: f64 = (left + right) * 0.5;
@@ -166,7 +186,7 @@ pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f
         let midpoint_velocity: f64 = instantaneous_velocity(midpoint, feature_id);
 
         // we are explicitly search for zero velocity, so just compare directly
-        if midpoint_velocity.abs() <= VELOCITY_TOLERANCE || (right - left) < ONE_MINUTE{
+        if midpoint_velocity == 0.0 || (right - left) < ONE_MINUTE{
             return midpoint
         } else if f64_same_sign(reference_velocity, midpoint_velocity) {
             left = midpoint;   // zero is in right half, advance left
@@ -192,15 +212,15 @@ pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
     let mut left_error = angular_difference(geocentric_longitude(left, feature_id), target_value);
-    const LONGITUDE_TOLERANCE: f64 = 1.0_f64 / 3600.0_f64; // 1 arcsecond accuracy for VSOP87C
-    const ONE_MINUTE: f64 = 1.0_f64 / 1440_f64;
+    if left_error == 0.0 { return left; }
+    if angular_difference(geocentric_longitude(right, feature_id), target_value) == 0.0 { return right; }
 
     loop {
         let midpoint: f64 = (left + right) * 0.5;
         let midpoint_longitude: f64 = geocentric_longitude(midpoint, feature_id);
         let midpoint_error = angular_difference(midpoint_longitude, target_value);
 
-        if midpoint_error.abs() < LONGITUDE_TOLERANCE || (right - left) < ONE_MINUTE {
+        if midpoint_error == 0.0 || (right - left) < ONE_MINUTE {
             return midpoint;
         } else if f64_same_sign(left_error, midpoint_error) {
             left = midpoint;
@@ -286,216 +306,4 @@ pub fn system_model_at_date(julian_date: f64) -> Vec<f64> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn angular_difference_wraps_across_zero() {
-        assert_eq!(angular_difference(1.0, 359.0), 2.0);
-        assert_eq!(angular_difference(359.0, 1.0), -2.0);
-        assert_eq!(angular_difference(0.0, 360.0), 0.0);
-    }
-
-    #[test]
-    fn identifies_zero_boundary_in_both_directions() {
-        assert_eq!(sign_boundary_between(359.0, 1.0), 0.0);
-        assert_eq!(sign_boundary_between(1.0, 359.0), 0.0);
-    }
-
-    #[test]
-    fn uses_safe_coarse_step_for_each_supported_feature() {
-        assert_eq!(coarse_step_for_feature(0), 3.5);
-        assert_eq!(coarse_step_for_feature(1), 12.0);
-        assert_eq!(coarse_step_for_feature(3), 18.0);
-        assert_eq!(coarse_step_for_feature(4), 60.0);
-        assert_eq!(coarse_step_for_feature(5), 67.0);
-        assert_eq!(coarse_step_for_feature(6), 75.0);
-        assert_eq!(coarse_step_for_feature(7), 78.0);
-        assert_eq!(coarse_step_for_feature(10), 14.0);
-        assert_eq!(coarse_step_for_feature(2), 1.0);
-        assert_eq!(coarse_step_for_feature(255), 1.0);
-    }
-
-    #[test]
-    fn brackets_only_stations_inside_a_coarse_segment() {
-        assert!(segment_has_interior_station(0.5, -0.5));
-        assert!(!segment_has_interior_station(0.0, -0.5));
-        assert!(!segment_has_interior_station(0.5, 0.0));
-        assert!(!segment_has_interior_station(5e-12, -0.5));
-        assert!(!segment_has_interior_station(0.5, -5e-12));
-        assert!(!segment_has_interior_station(0.5, 0.25));
-    }
-
-    #[test]
-    fn validates_every_search_input() {
-        assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[5]).is_ok());
-        assert!(validate_search_inputs(f64::NAN, 2_453_736.5, &[10], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, f64::INFINITY, &[10], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_736.5, 2_453_371.5, &[10], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, 2_453_371.5, &[10], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[], &[]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10, 0], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[2], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[11], &[5]).is_err());
-        assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[12]).is_err());
-    }
-
-    #[test]
-    fn refines_prograde_and_retrograde_zero_crossings() {
-        let mut previous_date = 2_451_544.5; // 2000-01-01
-        let mut previous_longitude = geocentric_longitude(previous_date, 0); // Mercury
-        let mut prograde_crossing = None;
-        let mut retrograde_crossing = None;
-
-        for day in 1..=(365 * 50) {
-            let current_date = 2_451_544.5 + day as f64;
-            let current_longitude = geocentric_longitude(current_date, 0);
-            let displacement = angular_difference(current_longitude, previous_longitude);
-
-            if previous_longitude > 330.0 && current_longitude < 30.0 && displacement > 0.0 {
-                prograde_crossing = Some((previous_date, current_date));
-            }
-
-            if previous_longitude < 30.0 && current_longitude > 330.0 && displacement < 0.0 {
-                retrograde_crossing = Some((previous_date, current_date));
-            }
-
-            if prograde_crossing.is_some() && retrograde_crossing.is_some() {
-                break;
-            }
-
-            previous_date = current_date;
-            previous_longitude = current_longitude;
-        }
-
-        for crossing_range in [prograde_crossing, retrograde_crossing] {
-            let (start, end) = crossing_range.expect("expected Mercury to cross 0° in both directions");
-            let crossing = bisection_value_find(start, end, 0.0, 0);
-            let longitude = geocentric_longitude(crossing, 0);
-            assert!(angular_difference(longitude, 0.0).abs() < 0.001);
-        }
-    }
-
-    #[test]
-    fn clips_open_window_to_search_boundaries() {
-        let search_start = 2_466_674.835_774_712;
-        let search_end = 2_468_099.372_874_511;
-
-        let results = search_refined_windows(search_start, search_end, &[6], &[4]); // Uranus in Leo
-
-        assert_eq!(results, vec![search_start, search_end]);
-    }
-
-    #[test]
-    fn clips_adjacent_partition_results_to_the_same_boundary() {
-        let search_start = 2_453_371.5; // 2005-01-01
-        let partition = 2_453_620.5;
-        let search_end = 2_453_736.5; // 2006-01-01
-
-        let complete = search_refined_windows(search_start, search_end, &[10], &[5]); // Sun in Virgo
-        let left = search_refined_windows(search_start, partition, &[10], &[5]);
-        let right = search_refined_windows(partition, search_end, &[10], &[5]);
-
-        assert_eq!(complete.len(), 2);
-        assert_eq!(left.len(), 2);
-        assert_eq!(right.len(), 2);
-        assert_eq!(left[1], partition);
-        assert_eq!(right[0], partition);
-        assert!((left[0] - complete[0]).abs() < 1.0 / 1440.0);
-        assert!((right[1] - complete[1]).abs() < 1.0 / 1440.0);
-    }
-
-    #[test]
-    fn randomized_search_matches_direct_evaluation() {
-        const CASE_COUNT: usize = 100;
-        const MIN_SEARCH_RADIUS_DAYS: f64 = 180.0;
-        const MAX_SEARCH_RADIUS_DAYS: f64 = 1_800.0;
-        const REFERENCE_STEP_DAYS: f64 = 1.0;
-        const REFERENCE_START_JD: f64 = 2_415_020.5; // 1900-01-01
-        const REFERENCE_END_JD: f64 = 2_488_069.5; // 2100-01-01
-        const SUPPORTED_FEATURES: [u8; 8] = [0, 1, 3, 4, 5, 6, 7, 10];
-
-        fn next_random(state: &mut u64) -> u64 {
-            *state ^= *state << 13;
-            *state ^= *state >> 7;
-            *state ^= *state << 17;
-            *state
-        }
-
-        fn date_is_valid(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
-            feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| {
-                let longitude = geocentric_longitude(julian_date, feature_id);
-                (longitude / 30.0) as u8 == feature_sign
-            })
-        }
-
-        fn date_is_in_results(julian_date: f64, results: &[f64]) -> bool {
-            results
-                .chunks_exact(2)
-                .any(|window| julian_date >= window[0] && julian_date <= window[1])
-        }
-
-        let mut random_state = 0x4e41_5441_4c43_4841_u64;
-
-        for case_index in 0..CASE_COUNT {
-            let random_fraction = next_random(&mut random_state) as f64 / u64::MAX as f64;
-            let selected_date = REFERENCE_START_JD
-                + MAX_SEARCH_RADIUS_DAYS
-                + random_fraction
-                    * (REFERENCE_END_JD - REFERENCE_START_JD - 2.0 * MAX_SEARCH_RADIUS_DAYS);
-            let radius_fraction = next_random(&mut random_state) as f64 / u64::MAX as f64;
-            let search_radius = MIN_SEARCH_RADIUS_DAYS
-                + radius_fraction * (MAX_SEARCH_RADIUS_DAYS - MIN_SEARCH_RADIUS_DAYS);
-            let search_start = selected_date - search_radius;
-            let search_end = selected_date + search_radius;
-
-            let mut shuffled_features = SUPPORTED_FEATURES;
-            for index in (1..shuffled_features.len()).rev() {
-                let swap_index = next_random(&mut random_state) as usize % (index + 1);
-                shuffled_features.swap(index, swap_index);
-            }
-
-            let feature_count = next_random(&mut random_state) as usize % SUPPORTED_FEATURES.len() + 1;
-            let feature_ids = &shuffled_features[..feature_count];
-            let feature_signs: Vec<u8> = feature_ids
-                .iter()
-                .map(|&feature_id| (geocentric_longitude(selected_date, feature_id) / 30.0) as u8)
-                .collect();
-
-            let results = search_refined_windows(search_start, search_end, feature_ids, &feature_signs);
-            let context = format!(
-                "case={case_index}, selected_date={selected_date}, search=[{search_start}, {search_end}], feature_ids={feature_ids:?}, feature_signs={feature_signs:?}, results={results:?}"
-            );
-
-            assert_eq!(results.len() % 2, 0, "result array must contain pairs; {context}");
-
-            let mut previous_end = None;
-            for window in results.chunks_exact(2) {
-                let start = window[0];
-                let end = window[1];
-                assert!(start < end, "window must have positive length; {context}");
-                assert!(start >= search_start && end <= search_end, "window must stay inside the requested range; {context}");
-                if let Some(previous_end) = previous_end {
-                    assert!(start >= previous_end, "windows must be sorted and nonoverlapping; {context}");
-                }
-                previous_end = Some(end);
-            }
-
-            assert!(
-                date_is_in_results(selected_date, &results),
-                "the generated source date must be returned; {context}"
-            );
-
-            let mut reference_date = search_start;
-            while reference_date <= search_end {
-                let expected = date_is_valid(reference_date, feature_ids, &feature_signs);
-                let actual = date_is_in_results(reference_date, &results);
-                assert_eq!(
-                    actual, expected,
-                    "optimized result disagrees with direct sign evaluation at julian_date={reference_date}; {context}"
-                );
-                reference_date += REFERENCE_STEP_DAYS;
-            }
-        }
-    }
-}
+mod tests;

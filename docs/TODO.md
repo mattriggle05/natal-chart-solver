@@ -13,15 +13,15 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [x] Return structured errors to TypeScript instead of `NaN`, panics, or silently empty results.
 - [x] Correctly preserve a matching window that begins at the start of the requested search range.
 - [x] Correctly append a matching window that remains open at the end of the requested search range.
-- [ ] Handle exact sign-boundary timestamps consistently.
+- [x] Handle exact sign-boundary timestamps consistently.
 - [x] Normalize angular differences across the 0°/360° boundary.
 - [x] Correctly detect Pisces-to-Aries and Aries-to-Pisces transitions in both prograde and retrograde motion.
 - [x] Replace average-displacement station detection with instantaneous angular velocity.
 - [x] Ensure station bracketing works when a station lies exactly on a coarse-sample timestamp.
 - [x] Split search ranges into provably monotonic intervals around retrograde stations.
 - [x] Make longitude boundary refinement work for both increasing and decreasing longitude.
-- [ ] Verify that multiple sign entries during one retrograde cycle produce separate, ordered windows.
-- [ ] Merge adjacent or numerically overlapping result windows where appropriate.
+- [x] Verify that multiple sign entries during one retrograde cycle produce separate, ordered windows.
+- [x] Merge adjacent or numerically overlapping result windows where appropriate.
 - [x] Guarantee sorted, nonoverlapping results for every valid search.
 - [ ] Decide how UTC, UT, TT, and JDE differences are handled and document the supported time accuracy.
 - [ ] Define the supported historical and future date range based on VSOP87 accuracy.
@@ -72,11 +72,11 @@ This checklist defines the work required for Natal Chart Solver to be considered
 
 ### Automated verification
 
-- [ ] Add Rust unit tests for angle normalization and sign mapping.
-- [ ] Add Rust unit tests for prograde and retrograde root refinement.
-- [ ] Add tests for stations, exact boundaries, range endpoints, and 0°/360° wraparound.
+- [x] Add Rust unit tests for angle normalization and sign mapping.
+- [x] Add Rust unit tests for prograde and retrograde root refinement.
+- [x] Add tests for stations, exact boundaries, range endpoints, and 0°/360° wraparound.
 - [x] Add tests for malformed arrays, invalid IDs, invalid signs, reversed ranges, and non-finite values.
-- [ ] Add golden-data tests using authoritative ephemeris values.
+- [x] Add golden-data tests using authoritative ephemeris values.
 - [x] Add property tests asserting sorted, nonoverlapping windows whose sampled interiors satisfy all requested signs.
 - [x] Compare optimized search results against a small-step brute-force reference implementation.
 - [ ] Add TypeScript tests for Julian-date conversion and result formatting.
