@@ -83,12 +83,12 @@ fn filter_window_for_feature(window_start: f64, window_end: f64, feature_id: u8,
     let coarse_step = coarse_step_for_feature(feature_id);
     let mut segment_start = window_start;
     let mut start_longitude = geocentric_longitude(segment_start, feature_id);
+    let mut start_velocity = instantaneous_velocity(segment_start, feature_id);
     let mut open_window_start = longitude_is_in_sign(start_longitude, feature_sign).then_some(window_start);
 
     while segment_start < window_end {
         let segment_end = (segment_start + coarse_step).min(window_end);
         let end_longitude = geocentric_longitude(segment_end, feature_id);
-        let start_velocity = instantaneous_velocity(segment_start, feature_id);
         let end_velocity = instantaneous_velocity(segment_end, feature_id);
 
         if segment_has_interior_station(start_velocity, end_velocity) {
@@ -102,6 +102,7 @@ fn filter_window_for_feature(window_start: f64, window_end: f64, feature_id: u8,
 
         segment_start = segment_end;
         start_longitude = end_longitude;
+        start_velocity = end_velocity;
     }
 
     if let Some(start) = open_window_start {

@@ -43,6 +43,7 @@ This checklist defines the work required for Natal Chart Solver to be considered
 
 - [x] Replace the fixed one-day coarse step with verified per-body safe step sizes.
 - [x] Add repeatable release profiling for initialization, validation, VSOP evaluation, per-feature filtering, and complete searches.
+- [x] Reuse endpoint velocities between adjacent coarse segments.
 - [ ] Automatically order filters by expected selectivity and computation cost.
 - [ ] Use the Sun as the first filter when it is included and verify that reordering cannot change results.
 - [x] Remove per-step Rust console logging from production builds.
