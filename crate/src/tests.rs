@@ -1,4 +1,6 @@
 use super::*;
+use std::hint::black_box;
+use std::time::{Duration, Instant};
 
 fn date_is_valid(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
     feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| longitude_is_in_sign(geocentric_longitude(julian_date, feature_id), feature_sign))
@@ -227,6 +229,73 @@ fn clips_adjacent_partition_results_to_the_same_boundary() {
 }
 
 #[test]
+#[ignore = "manual release profiling"]
+fn profile_search_execution() {
+    assert!(!cfg!(debug_assertions), "run this profiler with cargo test --release profile_search_execution -- --ignored --nocapture --test-threads=1");
+
+    const PROFILE_START: f64 = 2_451_544.5; // 2000-01-01
+    const PROFILE_END: f64 = 2_455_197.5; // 2010-01-01
+    const PROFILE_MIDPOINT: f64 = (PROFILE_START + PROFILE_END) * 0.5;
+    const FEATURE_IDS: [u8; 8] = [10, 0, 1, 3, 4, 5, 6, 7];
+
+    let first_evaluation_start = Instant::now();
+    black_box(geocentric_longitude(PROFILE_MIDPOINT, 0));
+    let first_evaluation_time = first_evaluation_start.elapsed();
+
+    black_box(search_refined_windows(PROFILE_START, PROFILE_START + 365.0, &[10], &[0]));
+
+    let validation_feature_ids = [10];
+    let validation_feature_signs = [0];
+    let validation_start = Instant::now();
+    for _ in 0..100_000 {
+        black_box(validate_search_inputs(black_box(PROFILE_START), black_box(PROFILE_END), black_box(&validation_feature_ids), black_box(&validation_feature_signs)).unwrap());
+    }
+    let validation_time = validation_start.elapsed();
+
+    eprintln!("profile range: 2000-01-01 through 2010-01-01");
+    eprintln!("first Mercury longitude evaluation: {first_evaluation_time:?}");
+    eprintln!("100000 input validations: {validation_time:?}");
+
+    for feature_id in FEATURE_IDS {
+        let evaluations_started = Instant::now();
+        for offset in 0..100 {
+            black_box(geocentric_longitude(PROFILE_MIDPOINT + offset as f64, feature_id));
+        }
+        eprintln!("100 warmed feature {feature_id} longitude evaluations: {:?}", evaluations_started.elapsed());
+    }
+
+    for feature_id in FEATURE_IDS {
+        let feature_sign = (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8;
+        let started = Instant::now();
+        let results = black_box(search_refined_windows(PROFILE_START, PROFILE_END, &[feature_id], &[feature_sign]));
+        eprintln!("single feature {feature_id}: {:?}, {} day coarse step, {} windows", started.elapsed(), coarse_step_for_feature(feature_id), results.len() / 2);
+    }
+
+    let feature_signs: Vec<u8> = FEATURE_IDS.iter().map(|&feature_id| (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
+    let total_search_start = Instant::now();
+    let total_results = black_box(search_refined_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs));
+    let total_search_time = total_search_start.elapsed();
+
+    let mut windows = vec![(PROFILE_START, PROFILE_END)];
+    let staged_search_start = Instant::now();
+    for (&feature_id, &feature_sign) in FEATURE_IDS.iter().zip(&feature_signs) {
+        let input_window_count = windows.len();
+        let stage_start = Instant::now();
+        let mut filtered_windows = Vec::new();
+        for &(window_start, window_end) in &windows {
+            filter_window_for_feature(window_start, window_end, feature_id, feature_sign, &mut filtered_windows);
+        }
+        merge_adjacent_or_overlapping_windows(&mut filtered_windows);
+        let stage_time = stage_start.elapsed();
+        eprintln!("staged feature {feature_id}: {stage_time:?}, {input_window_count} input windows, {} output windows", filtered_windows.len());
+        windows = filtered_windows;
+    }
+
+    eprintln!("complete eight feature search: {total_search_time:?}, {} windows", total_results.len() / 2);
+    eprintln!("sum of separately timed search stages: {:?}, {} windows", staged_search_start.elapsed(), windows.len());
+}
+
+#[test]
 fn randomized_search_matches_direct_evaluation() {
     const CASE_COUNT: usize = 100;
     const MIN_SEARCH_RADIUS_DAYS: f64 = 180.0;
@@ -244,6 +313,12 @@ fn randomized_search_matches_direct_evaluation() {
     }
 
     let mut random_state = 0x4e41_5441_4c43_4841_u64;
+    let warm_up_start = Instant::now();
+    black_box(search_refined_windows(2_451_544.5, 2_451_909.5, &[10], &[0]));
+    let warm_up_time = warm_up_start.elapsed();
+    let mut total_search_time = Duration::ZERO;
+    let mut total_boundary_check_time = Duration::ZERO;
+    let mut total_reference_time = Duration::ZERO;
 
     for case_index in 0..CASE_COUNT {
         let random_fraction = next_random(&mut random_state) as f64 / u64::MAX as f64;
@@ -263,7 +338,9 @@ fn randomized_search_matches_direct_evaluation() {
         let feature_ids = &shuffled_features[..feature_count];
         let feature_signs: Vec<u8> = feature_ids.iter().map(|&feature_id| (geocentric_longitude(selected_date, feature_id) / 30.0) as u8).collect();
 
+        let search_timer = Instant::now();
         let results = search_refined_windows(search_start, search_end, feature_ids, &feature_signs);
+        total_search_time += search_timer.elapsed();
         let context = format!("case={case_index}, selected_date={selected_date}, search=[{search_start}, {search_end}], feature_ids={feature_ids:?}, feature_signs={feature_signs:?}, results={results:?}");
 
         assert_eq!(results.len() % 2, 0, "result array must contain pairs; {context}");
@@ -281,8 +358,11 @@ fn randomized_search_matches_direct_evaluation() {
         }
 
         assert!(date_is_in_results(selected_date, &results), "the generated source date must be returned; {context}");
+        let boundary_check_timer = Instant::now();
         assert_result_boundaries_match_direct_evaluation(search_start, search_end, feature_ids, &feature_signs, &results, &context);
+        total_boundary_check_time += boundary_check_timer.elapsed();
 
+        let reference_timer = Instant::now();
         let mut reference_date = search_start;
         while reference_date <= search_end {
             let expected = date_is_valid(reference_date, feature_ids, &feature_signs);
@@ -290,5 +370,8 @@ fn randomized_search_matches_direct_evaluation() {
             assert_eq!(actual, expected, "optimized result disagrees with direct sign evaluation at julian_date={reference_date}; {context}");
             reference_date += REFERENCE_STEP_DAYS;
         }
+        total_reference_time += reference_timer.elapsed();
     }
+
+    eprintln!("randomized verifier timing: warm_up={warm_up_time:?}, searches={total_search_time:?}, boundary_checks={total_boundary_check_time:?}, daily_reference={total_reference_time:?}");
 }
