@@ -305,11 +305,45 @@ fn randomized_search_matches_direct_evaluation() {
     const REFERENCE_END_JD: f64 = 2_488_069.5; // 2100-01-01
     const SUPPORTED_FEATURES: [u8; 8] = [0, 1, 3, 4, 5, 6, 7, 10];
 
+    struct ResolutionSample {
+        width_days: f64,
+        feature_count: usize,
+        feature_ids: Vec<u8>,
+    }
+
     fn next_random(state: &mut u64) -> u64 {
         *state ^= *state << 13;
         *state ^= *state >> 7;
         *state ^= *state << 17;
         *state
+    }
+
+    fn mean(values: &[f64]) -> f64 {
+        values.iter().sum::<f64>() / values.len() as f64
+    }
+
+    fn median(values: &[f64]) -> f64 {
+        let mut sorted = values.to_vec();
+        sorted.sort_by(f64::total_cmp);
+        if sorted.len() % 2 == 0 { (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) * 0.5 } else { sorted[sorted.len() / 2] }
+    }
+
+    fn geometric_mean(values: &[f64]) -> f64 {
+        (values.iter().map(|value| value.ln()).sum::<f64>() / values.len() as f64).exp()
+    }
+
+    fn feature_name(feature_id: u8) -> &'static str {
+        match feature_id {
+            0 => "Mercury",
+            1 => "Venus",
+            3 => "Mars",
+            4 => "Jupiter",
+            5 => "Saturn",
+            6 => "Uranus",
+            7 => "Neptune",
+            10 => "Sun",
+            _ => "Unknown",
+        }
     }
 
     let mut random_state = 0x4e41_5441_4c43_4841_u64;
@@ -319,6 +353,7 @@ fn randomized_search_matches_direct_evaluation() {
     let mut total_search_time = Duration::ZERO;
     let mut total_boundary_check_time = Duration::ZERO;
     let mut total_reference_time = Duration::ZERO;
+    let mut resolution_samples = Vec::with_capacity(CASE_COUNT);
 
     for case_index in 0..CASE_COUNT {
         let random_fraction = next_random(&mut random_state) as f64 / u64::MAX as f64;
@@ -357,7 +392,8 @@ fn randomized_search_matches_direct_evaluation() {
             previous_end = Some(end);
         }
 
-        assert!(date_is_in_results(selected_date, &results), "the generated source date must be returned; {context}");
+        let matching_window = results.chunks_exact(2).find(|window| selected_date >= window[0] && selected_date < window[1]).unwrap_or_else(|| panic!("the generated source date must be returned; {context}"));
+        resolution_samples.push(ResolutionSample { width_days: matching_window[1] - matching_window[0], feature_count, feature_ids: feature_ids.to_vec() });
         let boundary_check_timer = Instant::now();
         assert_result_boundaries_match_direct_evaluation(search_start, search_end, feature_ids, &feature_signs, &results, &context);
         total_boundary_check_time += boundary_check_timer.elapsed();
@@ -374,4 +410,28 @@ fn randomized_search_matches_direct_evaluation() {
     }
 
     eprintln!("randomized verifier timing: warm_up={warm_up_time:?}, searches={total_search_time:?}, boundary_checks={total_boundary_check_time:?}, daily_reference={total_reference_time:?}");
+    eprintln!("randomized verifier resolution by feature count:");
+    for feature_count in 1..=SUPPORTED_FEATURES.len() {
+        let widths: Vec<f64> = resolution_samples.iter().filter(|sample| sample.feature_count == feature_count).map(|sample| sample.width_days).collect();
+        eprintln!("features={feature_count}, cases={}, mean_days={:.6}, median_days={:.6}, min_days={:.6}, max_days={:.6}", widths.len(), mean(&widths), median(&widths), widths.iter().copied().reduce(f64::min).unwrap(), widths.iter().copied().reduce(f64::max).unwrap());
+    }
+
+    eprintln!("randomized verifier resolution by included feature:");
+    for feature_id in SUPPORTED_FEATURES {
+        let widths_when_included: Vec<f64> = resolution_samples.iter().filter(|sample| sample.feature_ids.contains(&feature_id)).map(|sample| sample.width_days).collect();
+        let mut weighted_log_ratio = 0.0;
+        let mut total_weight = 0.0;
+        // Compare queries with and without this feature only within equal-sized groups. Geometric means limit distortion from the very long outer-planet windows.
+        for feature_count in 1..SUPPORTED_FEATURES.len() {
+            let included: Vec<f64> = resolution_samples.iter().filter(|sample| sample.feature_count == feature_count && sample.feature_ids.contains(&feature_id)).map(|sample| sample.width_days).collect();
+            let excluded: Vec<f64> = resolution_samples.iter().filter(|sample| sample.feature_count == feature_count && !sample.feature_ids.contains(&feature_id)).map(|sample| sample.width_days).collect();
+            if !included.is_empty() && !excluded.is_empty() {
+                let weight = included.len().min(excluded.len()) as f64;
+                weighted_log_ratio += (geometric_mean(&included) / geometric_mean(&excluded)).ln() * weight;
+                total_weight += weight;
+            }
+        }
+        let same_count_width_ratio = (weighted_log_ratio / total_weight).exp();
+        eprintln!("feature={}({feature_id}), included_cases={}, mean_days={:.6}, median_days={:.6}, same_count_width_ratio={same_count_width_ratio:.6}", feature_name(feature_id), widths_when_included.len(), mean(&widths_when_included), median(&widths_when_included));
+    }
 }
