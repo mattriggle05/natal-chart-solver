@@ -34,6 +34,24 @@ fn assert_result_boundaries_match_direct_evaluation(search_start: f64, search_en
     }
 }
 
+fn profile_repeated<F>(label: &str, sample_count: usize, mut run: F) where F: FnMut() {
+    run();
+    let mut samples = Vec::with_capacity(sample_count);
+    for _ in 0..sample_count {
+        let started = Instant::now();
+        run();
+        samples.push(started.elapsed().as_secs_f64());
+    }
+
+    samples.sort_by(f64::total_cmp);
+    let mean = samples.iter().sum::<f64>() / sample_count as f64;
+    let variance = samples.iter().map(|sample| (sample - mean).powi(2)).sum::<f64>() / (sample_count - 1) as f64;
+    let standard_deviation = variance.sqrt();
+    let confidence_interval_95 = 2.262 * standard_deviation / (sample_count as f64).sqrt();
+    let median = samples[sample_count / 2];
+    eprintln!("{label}: mean={:?}, median={:?}, standard_deviation={:?}, mean_95_percent_ci=±{:?}, samples={sample_count}", Duration::from_secs_f64(mean), Duration::from_secs_f64(median), Duration::from_secs_f64(standard_deviation), Duration::from_secs_f64(confidence_interval_95));
+}
+
 #[test]
 fn angular_difference_wraps_across_zero() {
     assert_eq!(angular_difference(1.0, 359.0), 2.0);
@@ -98,7 +116,7 @@ fn uses_safe_coarse_step_for_each_supported_feature() {
     assert_eq!(coarse_step_for_feature(5), 67.0);
     assert_eq!(coarse_step_for_feature(6), 75.0);
     assert_eq!(coarse_step_for_feature(7), 78.0);
-    assert_eq!(coarse_step_for_feature(10), 14.0);
+    assert_eq!(coarse_step_for_feature(10), 28.0);
     assert_eq!(coarse_step_for_feature(2), 1.0);
     assert_eq!(coarse_step_for_feature(255), 1.0);
 }
@@ -229,6 +247,37 @@ fn clips_adjacent_partition_results_to_the_same_boundary() {
 }
 
 #[test]
+fn searches_sun_before_other_features_regardless_of_input_order() {
+    let search_start = 2_451_544.5; // 2000-01-01
+    let search_end = 2_451_910.5; // 2001-01-01
+    let selected_date = (search_start + search_end) * 0.5;
+    let mercury_sign = (geocentric_longitude(selected_date, 0) / 30.0) as u8;
+    let sun_sign = (geocentric_longitude(selected_date, 10) / 30.0) as u8;
+
+    let sun_first = search_refined_windows(search_start, search_end, &[10, 0], &[sun_sign, mercury_sign]);
+    let sun_last = search_refined_windows(search_start, search_end, &[0, 10], &[mercury_sign, sun_sign]);
+
+    assert_eq!(sun_last, sun_first);
+}
+
+#[test]
+fn sun_fast_path_matches_daily_evaluation_for_every_sign() {
+    let search_start = 2_451_544.5; // 2000-01-01
+    let search_end = 2_451_910.5; // 2001-01-01
+
+    for sign in 0..12 {
+        let results = search_refined_windows(search_start, search_end, &[10], &[sign]);
+        let mut date = search_start;
+        while date < search_end {
+            let expected = longitude_is_in_sign(geocentric_longitude(date, 10), sign);
+            let actual = date_is_in_results(date, &results);
+            assert_eq!(actual, expected, "Sun sign={sign}, julian_date={date}, results={results:?}");
+            date += 1.0;
+        }
+    }
+}
+
+#[test]
 #[ignore = "manual release profiling"]
 fn profile_search_execution() {
     assert!(!cfg!(debug_assertions), "run this profiler with cargo test --release profile_search_execution -- --ignored --nocapture --test-threads=1");
@@ -293,6 +342,12 @@ fn profile_search_execution() {
 
     eprintln!("complete eight feature search: {total_search_time:?}, {} windows", total_results.len() / 2);
     eprintln!("sum of separately timed search stages: {:?}, {} windows", staged_search_start.elapsed(), windows.len());
+
+    let sun_last_feature_ids = [0, 1, 3, 4, 5, 6, 7, 10];
+    let sun_last_feature_signs: Vec<u8> = sun_last_feature_ids.iter().map(|&feature_id| (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
+    profile_repeated("repeated Sun only search", 10, || { black_box(search_refined_windows(PROFILE_START, PROFILE_END, &[10], &[feature_signs[0]])); });
+    profile_repeated("repeated eight feature Sun first search", 10, || { black_box(search_refined_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs)); });
+    profile_repeated("repeated eight feature Sun last search", 10, || { black_box(search_refined_windows(PROFILE_START, PROFILE_END, &sun_last_feature_ids, &sun_last_feature_signs)); });
 }
 
 #[test]
