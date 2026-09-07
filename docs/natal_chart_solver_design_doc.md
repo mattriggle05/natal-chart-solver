@@ -106,7 +106,7 @@ during development (~3-8 second rebuilds vs 30+ for release).
 ## Astronomical Model
 
 ### Coordinate System
-All calculations use **geocentric ecliptic longitude** — the apparent position of a
+All search calculations use **geocentric ecliptic longitude** — the geometric position of a
 planet as seen from Earth, measured in degrees along the ecliptic plane (0-360°).
 This matches the tropical zodiac used in astrology.
 
@@ -116,8 +116,7 @@ The `vsop87` Rust crate provides several variants. We use:
 | Module | Coordinates | Frame | Used For |
 |--------|-------------|-------|----------|
 | `vsop87c` | Heliocentric rectangular | Ecliptic of date | Geocentric calculations (search) |
-| `vsop87b` | Heliocentric spherical | J2000 | Sun longitude (earth + 180°) |
-| `vsop87d` | Heliocentric spherical | Ecliptic of date | Solar system display model |
+| `vsop87d` | Heliocentric spherical | Ecliptic of date | Sun longitude (earth + 180°) and solar system display model |
 
 **Why ecliptic of date (vsop87c/d) over J2000 (vsop87a/b)?**
 The tropical zodiac is defined relative to the vernal equinox of the current date, not
@@ -126,10 +125,9 @@ of date" coordinates. Using J2000 would introduce a ~0.37° error by 2026 (growi
 ~50.3 arcseconds/year due to precession). vsop87c was verified against JPL Horizons
 and matches to within 0.001° for geocentric longitude.
 
-**Known limitation:** vsop87d heliocentric longitudes are ~0.36° off from JPL for
-display purposes. This is believed to be a bug or mislabeling in the Rust crate's
-equinox-of-date transformation. Since heliocentric display is cosmetic only, this
-is acceptable. Geocentric calculations (the search) are accurate.
+The previously observed ~0.36° difference between `vsop87d` output and J2000
+reference values was the expected precession between coordinate frames, not a crate
+error. Search and display calculations now consistently use ecliptic-of-date coordinates.
 
 ### Geocentric Longitude Calculation
 For planets (VSOP87C provides rectangular heliocentric coordinates):
@@ -141,7 +139,7 @@ longitude = atan2(dy, dx) converted to degrees, rem_euclid(360)
 
 For the Sun:
 ```
-longitude = (vsop87b::earth(jd).longitude().to_degrees() + 180°).rem_euclid(360°)
+longitude = (vsop87d::earth(jd).longitude().to_degrees() + 180°).rem_euclid(360°)
 ```
 
 ### Planet/Feature ID Scheme
@@ -159,10 +157,13 @@ longitude = (vsop87b::earth(jd).longitude().to_degrees() + 180°).rem_euclid(360
 IDs 8, 9 are intentionally unused (reserved). The Moon and Pluto are not currently
 implemented (see Future Work).
 
-### Zodiac Sign Mapping
-Signs are indexed 0-11 (Aries=0 through Pisces=11). A planet at longitude L is in
-sign `(L / 30.0) as u8`. This is computed as `L * (1.0/30.0)` using a compile-time
-constant reciprocal to avoid division.
+### Angular Constraints
+The backend does not represent zodiac signs. It searches half-open angular arcs defined
+by a start in `[0°, 360°)` and a span in `(0°, 360°]`. The frontend converts a zodiac
+sign index to `start_degrees = sign_index * 30` and `span_degrees = 30`.
+
+Using a start and span instead of start and end removes ambiguity for arcs that cross
+0°/360°. Angle membership is `(angle - start_degrees).rem_euclid(360) < span_degrees`.
 
 ### Julian Date Conversion
 TypeScript:
@@ -178,14 +179,15 @@ is currently ~69 seconds — negligible for our use case (windows measured in da
 
 ### `search` (validated public search function, wasm_bindgen exported)
 ```rust
-pub fn search(start_julian_date: f64, end_julian_date: f64,
-              feature_ids: &[u8], feature_signs: &[u8]) -> Result<Vec<f64>, JsValue>
+pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8],
+              angle_starts: &[f64], angle_spans: &[f64]) -> Result<Vec<f64>, JsValue>
 ```
 
 **Parameters:**
 - `start_julian_date`, `end_julian_date`: Julian date range to search
-- `feature_ids`: Planet IDs in the order they should be evaluated (best filter first)
-- `feature_signs`: Corresponding zodiac sign index (0-11) for each planet
+- `feature_ids`: Angular feature IDs; the search currently evaluates the Sun first when present
+- `angle_starts`: Corresponding arc start angles in `[0°, 360°)`
+- `angle_spans`: Corresponding arc spans in `(0°, 360°]`
 
 **Returns:** A flat-packed `Vec<f64>` of `[window_start_jd, window_end_jd, ...]`
 pairs, or a JavaScript error for invalid input.
@@ -198,26 +200,24 @@ internal search algorithm to be replaced later.
 
 **Algorithm:**
 1. Starts with one window: the full search range
-2. For each planet in order:
+2. For each angular constraint in internal evaluation order:
    - For each current candidate window:
      - Coarse sweep using a conservative per-body step
-     - At each step: compute current longitude, check sign membership
+     - At each step: compute the feature angle
      - Detect retrograde stations via instantaneous velocity sign changes
      - On detected station: bisect to find precise station time
      - Split the step into monotonic segments around the station
-     - On sign boundary crossing: bisect to find precise crossing time
-     - Accumulate sub-windows where this planet is in the correct sign
+     - Detect every arc boundary crossed, including both boundaries of a narrow arc within one coarse step
+     - Bisect each crossed boundary and accumulate matching sub-windows
    - Replace window list with new sub-windows
 3. Return final intersected windows
 
 **Known issues / incomplete areas:**
-- Search input validation and structured errors are not implemented
-- Exact boundary inclusion semantics still need to be formalized across the public API
 - No streaming/callback — returns all results at once after full computation
 
 **Current conservative coarse steps (per planet):**
 ```
-Sun:     14 days
+Sun:     28 days
 Mercury: 3.5 days
 Venus:   12 days
 Mars:    18 days
@@ -229,13 +229,13 @@ Neptune: 78 days
 
 ---
 
-### `geocentric_longitude`
+### `angle_at`
 ```rust
-pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64
+pub fn angle_at(julian_date: f64, feature: Feature) -> f64
 ```
-Returns geocentric ecliptic longitude in degrees [0, 360) for a given body at a given
-Julian date. Returns `f64::NAN` for unknown feature IDs (NAN propagates visibly through
-downstream calculations rather than silently corrupting results like -1.0 would).
+Returns the selected feature's angle in degrees `[0°, 360°)` at a given Julian date.
+The current features are geocentric body longitudes. The `Feature` enum prevents an
+unsupported numeric ID from reaching astronomical evaluation after input validation.
 
 Earth (`vsop87c::earth`) is computed once and reused for all planet calculations in a
 single call to avoid redundant VSOP87 evaluations.
@@ -250,13 +250,13 @@ pub fn longitude_from_observer(observer_coords: RectangularCoordinates,
 Converts heliocentric rectangular coordinates to geocentric ecliptic longitude via
 vector subtraction and atan2. Named to clearly express "longitude of feature as seen
 from observer." The z dimension is intentionally ignored — ecliptic latitude is not
-needed for zodiac sign membership which is purely a function of ecliptic longitude.
+needed for longitude-based angular constraints.
 
 ---
 
 ### `instantaneous_velocity`
 ```rust
-pub fn instantaneous_velocity(julian_date: f64, feature_id: u8) -> f64
+pub fn instantaneous_velocity(julian_date: f64, feature: Feature) -> f64
 ```
 Computes geocentric angular velocity in degrees/day using the centered finite difference:
 ```
@@ -279,7 +279,7 @@ Cost: 2 VSOP87 calls per evaluation (4 total including earth computation).
 ```rust
 pub fn bisection_derivative_find_zero(start_julian_date: f64,
                                        end_julian_date: f64,
-                                       feature_id: u8) -> f64
+                                       feature: Feature) -> f64
 ```
 Finds the Julian date of a retrograde station (velocity zero) within a given interval
 using bisection. Caller must guarantee opposite velocity signs at endpoints.
@@ -297,17 +297,16 @@ retrograde→prograde stations.
 ### `bisection_value_find`
 ```rust
 pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64,
-                             target_value: f64, feature_id: u8) -> f64
+                             target_value: f64, feature: Feature) -> f64
 ```
-Finds the Julian date when a planet's geocentric longitude equals `target_value` within
-a given interval. Used to find precise sign boundary crossings.
+Finds the Julian date when a feature angle equals `target_value` within a monotonic
+interval. Used to refine angular-constraint boundary crossings.
 
 **Termination conditions:**
 - `|longitude - target| < 1/3600°` (1 arcsecond — the accuracy floor of VSOP87C)
 - Interval width < 1 minute
 
-**Target values** are sign boundaries: `sign_index * 30.0` (entry) or
-`(sign_index + 1) * 30.0` (exit).
+**Target values** are the constraint's start angle and its normalized end angle.
 
 ---
 
@@ -341,12 +340,18 @@ Exposes `{ search, results }` to components.
 `search(params)` posts a message to the worker with:
 ```typescript
 interface SearchParams {
-    startJd:    number;
-    endJd:      number;
-    featureIds: number[];
-    featureSigns: number[];
+    startJd: number;
+    endJd: number;
+    featureIds: Feature[];
+    angleStarts: number[];
+    angleSpans: number[];
 }
 ```
+
+The hook, worker, and Rust search implementation preserve these three equal-length
+arrays. The worker converts them into one `Uint8Array` and two `Float64Array` values
+for the WASM boundary. Matching Rust and TypeScript `Feature` enums give the shared
+integer feature IDs readable names.
 
 `results` is a `Float64Array` — flat-packed `[start_jd, end_jd, start_jd, end_jd, ...]`.
 
@@ -356,7 +361,7 @@ Calls the validated public `search` function with typed arrays constructed from 
 Error handling via try/catch with `postMessage({ type: 'ERROR' })`.
 
 ### Component: `SearchBox`
-Currently hardcoded test search (Sun in Libra, 2005-2006). Houses the
+Currently hardcoded test search (Sun in Virgo, 2005-2006). Houses the
 `formatResults` / `jdToDate` display logic.
 
 ### Component: `SolarSystem`
@@ -378,8 +383,8 @@ for bisection on our interval sizes — a meaningful but not critical improvemen
 Implementation should be straightforward using the argmin crate source as reference.
 
 ### Retrograde Station Detection — The Core Problem
-The fundamental challenge: no finite step size can guarantee finding an arbitrarily
-small angular excursion caused by retrograde motion crossing a sign boundary briefly.
+The fundamental challenge is detecting a small angular excursion caused by retrograde
+motion between coarse samples.
 
 **Implemented solution:**
 1. Use `instantaneous_velocity()` at each coarse step — not average velocity
@@ -396,20 +401,19 @@ enough to make the net displacement negative). The implementation avoids this by
 
 ### Monotonic Interval Guarantee
 Between any two consecutive retrograde stations, a planet's geocentric longitude is
-strictly monotonic. This guarantees at most one sign boundary crossing per interval,
-making bisection provably correct (by the Intermediate Value Theorem). The algorithm
-partitions time into monotonic intervals using station times as breakpoints.
+strictly monotonic. The algorithm partitions time into monotonic intervals using station
+times as breakpoints, detects either or both constraint boundaries within each segment,
+and refines every crossing independently.
 
 ### Safe Step Sizes
-The step must be short enough that one monotonic segment cannot pass completely through
-a 30° sign without either endpoint landing inside it. It must also be short enough that
-two stations cannot occur inside one sampled segment. The current implementation uses
-additional safety margin after the randomized verifier demonstrated that the earlier
-43-day Mars estimate could skip a complete Aries interval.
+The step must keep angular displacement below 180° so direction can be unwrapped
+unambiguously. For retrograde features it must also be short enough that two stations
+cannot occur inside one sampled segment. Constraint width does not limit the step because
+both boundaries can be detected between samples.
 
 | Planet | Current step |
 |--------|--------------|
-| Sun    | 14d          |
+| Sun    | 28d          |
 | Mercury| 3.5d         |
 | Venus  | 12d          |
 | Mars   | 18d          |
@@ -428,11 +432,6 @@ additional safety margin after the randomized verifier demonstrated that the ear
 Currently `search` returns only after full computation. Pass a `js_sys::Function`
 callback into the Rust function and call it with each window as it's found. The UI
 can then populate progressively rather than waiting for completion.
-
-**2. Sun as first filter**
-The Sun never retrogrades and is cheapest to calculate. It should always be the first
-planet evaluated regardless of user input order, collapsing the search space by ~92%
-before any other planet is checked.
 
 ### Medium Priority
 

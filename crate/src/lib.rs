@@ -1,53 +1,83 @@
-use std::f64::NAN;
-
 use wasm_bindgen::prelude::*;
 use vsop87::*;
 
 const VELOCITY_TOLERANCE: f64 = 6e-12;
 const ONE_MINUTE: f64 = 1.0 / 1440.0;
 
-/// Returns flattened Julian-date window pairs using `[start, end)` semantics.
-#[wasm_bindgen]
-pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Result<Vec<f64>, JsValue> {
-    validate_search_inputs(start_julian_date, end_julian_date, feature_ids, feature_signs).map_err(JsValue::from_str)?;
-
-    Ok(search_refined_windows(start_julian_date, end_julian_date, feature_ids, feature_signs))
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum Feature {
+    MercuryLongitude = 0,
+    VenusLongitude = 1,
+    MarsLongitude = 3,
+    JupiterLongitude = 4,
+    SaturnLongitude = 5,
+    UranusLongitude = 6,
+    NeptuneLongitude = 7,
+    SunLongitude = 10,
 }
 
-fn validate_search_inputs(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Result<(), &'static str> {
+impl TryFrom<u8> for Feature {
+    type Error = ();
+
+    fn try_from(feature_id: u8) -> Result<Self, Self::Error> {
+        match feature_id {
+            0 => Ok(Self::MercuryLongitude),
+            1 => Ok(Self::VenusLongitude),
+            3 => Ok(Self::MarsLongitude),
+            4 => Ok(Self::JupiterLongitude),
+            5 => Ok(Self::SaturnLongitude),
+            6 => Ok(Self::UranusLongitude),
+            7 => Ok(Self::NeptuneLongitude),
+            10 => Ok(Self::SunLongitude),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Returns flattened Julian-date window pairs using `[start, end)` semantics.
+#[wasm_bindgen]
+pub fn search(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], angle_starts: &[f64], angle_spans: &[f64]) -> Result<Vec<f64>, JsValue> {
+    validate_search_inputs(start_julian_date, end_julian_date, feature_ids, angle_starts, angle_spans).map_err(JsValue::from_str)?;
+
+    Ok(search_refined_windows(start_julian_date, end_julian_date, feature_ids, angle_starts, angle_spans))
+}
+
+fn validate_search_inputs(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], angle_starts: &[f64], angle_spans: &[f64]) -> Result<(), &'static str> {
     if !start_julian_date.is_finite() || !end_julian_date.is_finite() {
         return Err("search dates must be finite");
     }
     if start_julian_date >= end_julian_date {
         return Err("search start date must be earlier than end date");
     }
-    if feature_ids.is_empty() || feature_signs.is_empty() {
-        return Err("search requires at least one feature and sign");
+    if feature_ids.is_empty() || angle_starts.is_empty() || angle_spans.is_empty() {
+        return Err("search requires at least one angular constraint");
     }
-    if feature_ids.len() != feature_signs.len() {
-        return Err("feature and sign lists must have equal lengths");
+    if feature_ids.len() != angle_starts.len() || feature_ids.len() != angle_spans.len() {
+        return Err("feature, angle start, and angle span lists must have equal lengths");
     }
-    if !feature_ids
-        .iter()
-        .all(|feature_id| matches!(feature_id, 0 | 1 | 3 | 4 | 5 | 6 | 7 | 10))
-    {
+    if !feature_ids.iter().all(|&feature_id| Feature::try_from(feature_id).is_ok()) {
         return Err("search contains an unsupported feature ID");
     }
-    if !feature_signs.iter().all(|feature_sign| *feature_sign <= 11) {
-        return Err("sign IDs must be between 0 and 11");
+    if !angle_starts.iter().all(|&angle_start| angle_start.is_finite() && (0.0..360.0).contains(&angle_start)) {
+        return Err("angle starts must be finite and between 0 inclusive and 360 exclusive");
+    }
+    if !angle_spans.iter().all(|&angle_span| angle_span.is_finite() && angle_span > 0.0 && angle_span <= 360.0) {
+        return Err("angle spans must be finite and greater than 0 and no greater than 360");
     }
     Ok(())
 }
 
-fn search_refined_windows(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
+fn search_refined_windows(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], angle_starts: &[f64], angle_spans: &[f64]) -> Vec<f64> {
     let mut prev_windows: Vec<(f64, f64)> = Vec::from([(start_julian_date, end_julian_date)]);
 
-    let feature_order = feature_ids.iter().enumerate().filter(|(_, feature_id)| **feature_id == 10).chain(feature_ids.iter().enumerate().filter(|(_, feature_id)| **feature_id != 10));
+    let constraint_order = (0..feature_ids.len()).filter(|&index| feature_ids[index] == Feature::SunLongitude as u8).chain((0..feature_ids.len()).filter(|&index| feature_ids[index] != Feature::SunLongitude as u8));
 
-    for (i, &feature_id) in feature_order {
+    for index in constraint_order {
+        let feature = Feature::try_from(feature_ids[index]).expect("validated feature ID");
         let mut curr_windows: Vec<(f64, f64)> = Vec::new();
         for &(window_start, window_end) in &prev_windows {
-            filter_window_for_feature(window_start, window_end, feature_id, feature_signs[i], &mut curr_windows);
+            filter_window_for_constraint(window_start, window_end, feature, angle_starts[index], angle_spans[index], &mut curr_windows);
         }
         merge_adjacent_or_overlapping_windows(&mut curr_windows);
         prev_windows = curr_windows;
@@ -77,38 +107,40 @@ fn merge_adjacent_or_overlapping_windows(windows: &mut Vec<(f64, f64)>) {
     windows.truncate(write_index + 1);
 }
 
-fn filter_window_for_feature(window_start: f64, window_end: f64, feature_id: u8, feature_sign: u8, output: &mut Vec<(f64, f64)>) {
+fn filter_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
     if window_start >= window_end {
         return;
     }
 
-    if feature_id == 10 {
-        filter_monotonic_window_for_feature(window_start, window_end, feature_id, feature_sign, output);
-        return;
+    match feature {
+        Feature::SunLongitude => filter_monotonic_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
+        _ => filter_retrograde_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
     }
+}
 
-    let coarse_step = coarse_step_for_feature(feature_id);
+fn filter_retrograde_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
+    let coarse_step = coarse_step_for_feature(feature);
     let mut segment_start = window_start;
-    let mut start_longitude = geocentric_longitude(segment_start, feature_id);
-    let mut start_velocity = instantaneous_velocity(segment_start, feature_id);
-    let mut open_window_start = longitude_is_in_sign(start_longitude, feature_sign).then_some(window_start);
+    let mut start_angle = angle_at(segment_start, feature);
+    let mut start_velocity = instantaneous_velocity(segment_start, feature);
+    let mut open_window_start = angle_is_in_range(start_angle, angle_start, angle_span).then_some(window_start);
 
     while segment_start < window_end {
         let segment_end = (segment_start + coarse_step).min(window_end);
-        let end_longitude = geocentric_longitude(segment_end, feature_id);
-        let end_velocity = instantaneous_velocity(segment_end, feature_id);
+        let end_angle = angle_at(segment_end, feature);
+        let end_velocity = instantaneous_velocity(segment_end, feature);
 
         if segment_has_interior_station(start_velocity, end_velocity) {
-            let station_date = bisection_derivative_find_zero(segment_start, segment_end, feature_id);
-            let station_longitude = geocentric_longitude(station_date, feature_id);
-            process_monotonic_segment(segment_start, station_date, start_longitude, station_longitude, feature_id, feature_sign, &mut open_window_start, output);
-            process_monotonic_segment(station_date, segment_end, station_longitude, end_longitude, feature_id, feature_sign, &mut open_window_start, output);
+            let station_date = bisection_derivative_find_zero(segment_start, segment_end, feature);
+            let station_angle = angle_at(station_date, feature);
+            process_monotonic_segment(segment_start, station_date, start_angle, station_angle, feature, angle_start, angle_span, &mut open_window_start, output);
+            process_monotonic_segment(station_date, segment_end, station_angle, end_angle, feature, angle_start, angle_span, &mut open_window_start, output);
         } else {
-            process_monotonic_segment(segment_start, segment_end, start_longitude, end_longitude, feature_id, feature_sign, &mut open_window_start, output);
+            process_monotonic_segment(segment_start, segment_end, start_angle, end_angle, feature, angle_start, angle_span, &mut open_window_start, output);
         }
 
         segment_start = segment_end;
-        start_longitude = end_longitude;
+        start_angle = end_angle;
         start_velocity = end_velocity;
     }
 
@@ -119,18 +151,18 @@ fn filter_window_for_feature(window_start: f64, window_end: f64, feature_id: u8,
     }
 }
 
-fn filter_monotonic_window_for_feature(window_start: f64, window_end: f64, feature_id: u8, feature_sign: u8, output: &mut Vec<(f64, f64)>) {
-    let coarse_step = coarse_step_for_feature(feature_id);
+fn filter_monotonic_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
+    let coarse_step = coarse_step_for_feature(feature);
     let mut segment_start = window_start;
-    let mut start_longitude = geocentric_longitude(segment_start, feature_id);
-    let mut open_window_start = longitude_is_in_sign(start_longitude, feature_sign).then_some(window_start);
+    let mut start_angle = angle_at(segment_start, feature);
+    let mut open_window_start = angle_is_in_range(start_angle, angle_start, angle_span).then_some(window_start);
 
     while segment_start < window_end {
         let segment_end = (segment_start + coarse_step).min(window_end);
-        let end_longitude = geocentric_longitude(segment_end, feature_id);
-        process_monotonic_segment(segment_start, segment_end, start_longitude, end_longitude, feature_id, feature_sign, &mut open_window_start, output);
+        let end_angle = angle_at(segment_end, feature);
+        process_monotonic_segment(segment_start, segment_end, start_angle, end_angle, feature, angle_start, angle_span, &mut open_window_start, output);
         segment_start = segment_end;
-        start_longitude = end_longitude;
+        start_angle = end_angle;
     }
 
     if let Some(start) = open_window_start {
@@ -147,72 +179,92 @@ fn segment_has_interior_station(start_velocity: f64, end_velocity: f64) -> bool 
         && !f64_same_sign(start_velocity, end_velocity)
 }
 
-fn process_monotonic_segment(segment_start: f64, segment_end: f64, start_longitude: f64, end_longitude: f64, feature_id: u8, feature_sign: u8, open_window_start: &mut Option<f64>, output: &mut Vec<(f64, f64)>) {
-    if segment_start >= segment_end {
+fn process_monotonic_segment(segment_start: f64, segment_end: f64, start_angle: f64, end_angle: f64, feature: Feature, angle_start: f64, angle_span: f64, open_window_start: &mut Option<f64>, output: &mut Vec<(f64, f64)>) {
+    if segment_start >= segment_end || angle_span == 360.0 {
         return;
     }
 
-    let start_is_valid = longitude_is_in_sign(start_longitude, feature_sign);
-    let end_is_valid = longitude_is_in_sign(end_longitude, feature_sign);
+    let displacement = angular_difference(end_angle, start_angle);
+    if displacement == 0.0 {
+        return;
+    }
 
-    match (start_is_valid, end_is_valid) {
-        (false, true) => {
-            let target = sign_boundary_between(start_longitude, end_longitude);
-            *open_window_start = Some(bisection_value_find_with_longitudes(segment_start, segment_end, start_longitude, end_longitude, target, feature_id));
-        }
-        (true, false) => {
-            let target = sign_boundary_between(start_longitude, end_longitude);
-            let window_end = bisection_value_find_with_longitudes(segment_start, segment_end, start_longitude, end_longitude, target, feature_id);
-            let window_start = open_window_start.take().unwrap_or(segment_start);
-            if window_start < window_end {
-                output.push((window_start, window_end));
+    let angle_immediately_after_start = (start_angle + displacement.signum() * 1e-10).rem_euclid(360.0);
+    let should_be_open = angle_is_in_range(angle_immediately_after_start, angle_start, angle_span);
+    if should_be_open && open_window_start.is_none() {
+        *open_window_start = Some(segment_start);
+    } else if !should_be_open {
+        if let Some(window_start) = open_window_start.take() {
+            if window_start < segment_start {
+                output.push((window_start, segment_start));
             }
         }
-        (true, true) => {
-            if open_window_start.is_none() {
-                *open_window_start = Some(segment_start);
+    }
+
+    let end_boundary = (angle_start + angle_span).rem_euclid(360.0);
+    let mut crossings = [
+        constraint_boundary_crossing(start_angle, displacement, angle_start),
+        constraint_boundary_crossing(start_angle, displacement, end_boundary),
+    ];
+    if crossings[0].0 > crossings[1].0 {
+        crossings.swap(0, 1);
+    }
+
+    for (distance, target_angle) in crossings {
+        if distance > 0.0 && distance <= displacement.abs() {
+            let crossing_date = bisection_value_find_with_angles(segment_start, segment_end, start_angle, end_angle, target_angle, feature);
+            if let Some(window_start) = open_window_start.take() {
+                if window_start < crossing_date {
+                    output.push((window_start, crossing_date));
+                }
+            } else {
+                *open_window_start = Some(crossing_date);
             }
         }
-        (false, false) => {}
     }
 }
 
 #[inline(always)]
-fn longitude_is_in_sign(longitude: f64, sign: u8) -> bool {
-    (longitude / 30.0) as u8 == sign
+fn angle_is_in_range(angle: f64, angle_start: f64, angle_span: f64) -> bool {
+    (angle - angle_start).rem_euclid(360.0) < angle_span
+}
+
+#[inline(always)]
+fn constraint_boundary_crossing(start_angle: f64, displacement: f64, boundary: f64) -> (f64, f64) {
+    let distance = if displacement > 0.0 { (boundary - start_angle).rem_euclid(360.0) } else { (start_angle - boundary).rem_euclid(360.0) };
+    (distance, boundary)
 }
 
 /// Returns a conservative search step in days for each supported feature.
-/// Steps are bounded by sign-crossing speed and minimum retrograde duration.
+/// Steps are bounded by angular speed and minimum retrograde duration.
 #[inline(always)]
-pub fn coarse_step_for_feature(feature_id: u8) -> f64 {
-    match feature_id {
-        0 => 3.5,  // Mercury
-        1 => 12.0, // Venus
-        3 => 18.0, // Mars
-        4 => 60.0, // Jupiter
-        5 => 67.0, // Saturn
-        6 => 75.0, // Uranus
-        7 => 78.0, // Neptune
-        10 => 28.0, // Sun
-        _ => 1.0,   // Preserve conservative behavior until input validation rejects unsupported IDs.
+pub fn coarse_step_for_feature(feature: Feature) -> f64 {
+    match feature {
+        Feature::MercuryLongitude => 3.5,
+        Feature::VenusLongitude => 12.0,
+        Feature::MarsLongitude => 18.0,
+        Feature::JupiterLongitude => 60.0,
+        Feature::SaturnLongitude => 67.0,
+        Feature::UranusLongitude => 75.0,
+        Feature::NeptuneLongitude => 78.0,
+        Feature::SunLongitude => 28.0,
     }
 }
 
 
 ///
 #[inline(always)]
-pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f64, feature_id: u8) -> f64{
+pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f64, feature: Feature) -> f64{
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
-    let reference_velocity: f64 = instantaneous_velocity(left, feature_id);
+    let reference_velocity: f64 = instantaneous_velocity(left, feature);
     if reference_velocity == 0.0 { return left; }
-    if instantaneous_velocity(right, feature_id) == 0.0 { return right; }
+    if instantaneous_velocity(right, feature) == 0.0 { return right; }
 
     loop {
         let midpoint: f64 = (left + right) * 0.5;
 
-        let midpoint_velocity: f64 = instantaneous_velocity(midpoint, feature_id);
+        let midpoint_velocity: f64 = instantaneous_velocity(midpoint, feature);
 
         // we are explicitly search for zero velocity, so just compare directly
         if midpoint_velocity == 0.0 || (right - left) < ONE_MINUTE{
@@ -227,33 +279,33 @@ pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f
 
 /// instantaneous velocity using definition of a derivative
 #[inline(always)]
-pub fn instantaneous_velocity(julian_date: f64, feature_id: u8) -> f64{
+pub fn instantaneous_velocity(julian_date: f64, feature: Feature) -> f64{
     const DERIVATIVE_STEP: f64 = 6e-6_f64; // equivalent to the cube root of f64::EPSILON, for error stuff
     const DOUBLE_DERIVATIVE_STEP: f64 = 1.2e-5_f64; 
 
-    let before = geocentric_longitude(julian_date - DERIVATIVE_STEP, feature_id);
-    let after = geocentric_longitude(julian_date + DERIVATIVE_STEP, feature_id);
+    let before = angle_at(julian_date - DERIVATIVE_STEP, feature);
+    let after = angle_at(julian_date + DERIVATIVE_STEP, feature);
     return angular_difference(after, before) / DOUBLE_DERIVATIVE_STEP
 }
 
 ///
-pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature_id: u8) -> f64 {
-    let start_longitude = geocentric_longitude(start_julian_date, feature_id);
-    let end_longitude = geocentric_longitude(end_julian_date, feature_id);
-    bisection_value_find_with_longitudes(start_julian_date, end_julian_date, start_longitude, end_longitude, target_value, feature_id)
+pub fn bisection_value_find(start_julian_date: f64, end_julian_date: f64, target_value: f64, feature: Feature) -> f64 {
+    let start_angle = angle_at(start_julian_date, feature);
+    let end_angle = angle_at(end_julian_date, feature);
+    bisection_value_find_with_angles(start_julian_date, end_julian_date, start_angle, end_angle, target_value, feature)
 }
 
-fn bisection_value_find_with_longitudes(start_julian_date: f64, end_julian_date: f64, start_longitude: f64, end_longitude: f64, target_value: f64, feature_id: u8) -> f64 {
+fn bisection_value_find_with_angles(start_julian_date: f64, end_julian_date: f64, start_angle: f64, end_angle: f64, target_value: f64, feature: Feature) -> f64 {
     let mut left: f64 = start_julian_date;
     let mut right: f64 = end_julian_date;
-    let mut left_error = angular_difference(start_longitude, target_value);
+    let mut left_error = angular_difference(start_angle, target_value);
     if left_error == 0.0 { return left; }
-    if angular_difference(end_longitude, target_value) == 0.0 { return right; }
+    if angular_difference(end_angle, target_value) == 0.0 { return right; }
 
     loop {
         let midpoint: f64 = (left + right) * 0.5;
-        let midpoint_longitude: f64 = geocentric_longitude(midpoint, feature_id);
-        let midpoint_error = angular_difference(midpoint_longitude, target_value);
+        let midpoint_angle: f64 = angle_at(midpoint, feature);
+        let midpoint_error = angular_difference(midpoint_angle, target_value);
 
         if midpoint_error == 0.0 || (right - left) < ONE_MINUTE {
             return midpoint;
@@ -273,34 +325,22 @@ pub fn angular_difference(to: f64, from: f64) -> f64 {
     (to - from + 180.0).rem_euclid(360.0) - 180.0
 }
 
-/// Returns the zodiac boundary crossed while moving from `start_longitude`
-/// to `end_longitude`. Callers must provide a step containing one boundary at most.
-#[inline(always)]
-pub fn sign_boundary_between(start_longitude: f64, end_longitude: f64) -> f64 {
-    if angular_difference(end_longitude, start_longitude) > 0.0 {
-        ((start_longitude / 30.0).floor() + 1.0).rem_euclid(12.0) * 30.0
-    } else {
-        (start_longitude / 30.0).floor() * 30.0
-    }
-}
-
 #[inline]
-pub fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
+pub fn angle_at(julian_date: f64, feature: Feature) -> f64 {
+    if feature == Feature::SunLongitude {
+        return (vsop87d::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0);
+    }
+
     let earth: RectangularCoordinates = vsop87c::earth(julian_date);
-    return match feature_id {
-        // planets
-        0 => longitude_from_observer(earth, vsop87c::mercury(julian_date)),
-        1 => longitude_from_observer(earth, vsop87c::venus(julian_date)),
-        // 2 is earth
-        3 => longitude_from_observer(earth, vsop87c::mars(julian_date)),
-        4 => longitude_from_observer(earth, vsop87c::jupiter(julian_date)),
-        5 => longitude_from_observer(earth, vsop87c::saturn(julian_date)),
-        6 => longitude_from_observer(earth, vsop87c::uranus(julian_date)),
-        7 => longitude_from_observer(earth, vsop87c::neptune(julian_date)),
-        // sun
-        10 => (vsop87b::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0),
-        // catch all error case
-        _ => return NAN,
+    return match feature {
+        Feature::MercuryLongitude => longitude_from_observer(earth, vsop87c::mercury(julian_date)),
+        Feature::VenusLongitude => longitude_from_observer(earth, vsop87c::venus(julian_date)),
+        Feature::MarsLongitude => longitude_from_observer(earth, vsop87c::mars(julian_date)),
+        Feature::JupiterLongitude => longitude_from_observer(earth, vsop87c::jupiter(julian_date)),
+        Feature::SaturnLongitude => longitude_from_observer(earth, vsop87c::saturn(julian_date)),
+        Feature::UranusLongitude => longitude_from_observer(earth, vsop87c::uranus(julian_date)),
+        Feature::NeptuneLongitude => longitude_from_observer(earth, vsop87c::neptune(julian_date)),
+        Feature::SunLongitude => unreachable!(),
     };
 }
 

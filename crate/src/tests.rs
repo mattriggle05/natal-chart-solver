@@ -2,8 +2,22 @@ use super::*;
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
+fn feature_from_id(feature_id: u8) -> Feature {
+    Feature::try_from(feature_id).expect("supported test feature")
+}
+
+fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
+    angle_at(julian_date, feature_from_id(feature_id))
+}
+
+fn search_sign_windows(start_julian_date: f64, end_julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> Vec<f64> {
+    let angle_starts: Vec<f64> = feature_signs.iter().map(|&feature_sign| feature_sign as f64 * 30.0).collect();
+    let angle_spans = vec![30.0; feature_signs.len()];
+    search_refined_windows(start_julian_date, end_julian_date, feature_ids, &angle_starts, &angle_spans)
+}
+
 fn date_is_valid(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
-    feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| longitude_is_in_sign(geocentric_longitude(julian_date, feature_id), feature_sign))
+    feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| angle_is_in_range(geocentric_longitude(julian_date, feature_id), feature_sign as f64 * 30.0, 30.0))
 }
 
 fn date_is_in_results(julian_date: f64, results: &[f64]) -> bool {
@@ -60,22 +74,34 @@ fn angular_difference_wraps_across_zero() {
 }
 
 #[test]
-fn maps_longitudes_to_half_open_signs() {
+fn maps_angles_to_half_open_constraints() {
     let immediately_before_30 = f64::from_bits(30.0_f64.to_bits() - 1);
     let immediately_before_360 = f64::from_bits(360.0_f64.to_bits() - 1);
 
-    assert!(longitude_is_in_sign(0.0, 0));
-    assert!(longitude_is_in_sign(immediately_before_30, 0));
-    assert!(!longitude_is_in_sign(30.0, 0));
-    assert!(longitude_is_in_sign(30.0, 1));
-    assert!(longitude_is_in_sign(immediately_before_360, 11));
-    assert!(!longitude_is_in_sign(0.0, 11));
+    assert!(angle_is_in_range(0.0, 0.0, 30.0));
+    assert!(angle_is_in_range(immediately_before_30, 0.0, 30.0));
+    assert!(!angle_is_in_range(30.0, 0.0, 30.0));
+    assert!(angle_is_in_range(immediately_before_360, 330.0, 30.0));
+    assert!(!angle_is_in_range(0.0, 330.0, 30.0));
 }
 
 #[test]
-fn identifies_zero_boundary_in_both_directions() {
-    assert_eq!(sign_boundary_between(359.0, 1.0), 0.0);
-    assert_eq!(sign_boundary_between(1.0, 359.0), 0.0);
+fn matches_reference_sun_longitudes_across_supported_centuries() {
+    // NASA JPL Horizons DE441 apparent geocentric ecliptic-of-date longitude, quantity 31.
+    // The tolerance covers the expected difference between VSOP87's geometric coordinates
+    // and Horizons' light-time, aberration, and gravitational-deflection corrections.
+    const MAX_DIFFERENCE_DEGREES: f64 = 0.02;
+    let cases = [
+        (2_415_021.0, 280.663_243_8), // 1900-01-01 12:00 TT
+        (2_451_545.0, 280.368_151_9), // 2000-01-01 12:00 TT
+        (2_488_070.0, 281.112_835_3), // 2100-01-01 12:00 TT
+    ];
+
+    for (julian_date, reference_longitude) in cases {
+        let longitude = geocentric_longitude(julian_date, 10);
+        let difference = angular_difference(longitude, reference_longitude).abs();
+        assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, longitude={longitude}, reference_longitude={reference_longitude}, difference={difference}");
+    }
 }
 
 #[test]
@@ -85,13 +111,55 @@ fn returns_exact_value_boundaries_at_bisection_endpoints() {
     let start_longitude = geocentric_longitude(start, 10);
     let end_longitude = geocentric_longitude(end, 10);
 
-    assert_eq!(bisection_value_find(start, end, start_longitude, 10), start);
-    assert_eq!(bisection_value_find(start, end, end_longitude, 10), end);
+    assert_eq!(bisection_value_find(start, end, start_longitude, Feature::SunLongitude), start);
+    assert_eq!(bisection_value_find(start, end, end_longitude, Feature::SunLongitude), end);
+}
+
+#[test]
+fn finds_narrow_and_wrapped_angular_constraints() {
+    const SEARCH_START: f64 = 2_451_544.5; // 2000-01-01
+    const SEARCH_END: f64 = 2_451_910.5; // 2001-01-01
+
+    for (angle_start, angle_span) in [(15.0, 1.0), (350.0, 20.0)] {
+        let results = search_refined_windows(SEARCH_START, SEARCH_END, &[Feature::SunLongitude as u8], &[angle_start], &[angle_span]);
+        assert_eq!(results.len(), 2, "angle_start={angle_start}, angle_span={angle_span}, results={results:?}");
+        assert!(angle_is_in_range(angle_at((results[0] + results[1]) * 0.5, Feature::SunLongitude), angle_start, angle_span), "angle_start={angle_start}, angle_span={angle_span}, results={results:?}");
+        assert!(!angle_is_in_range(angle_at(results[0] - 2.0 / 1440.0, Feature::SunLongitude), angle_start, angle_span), "angle_start={angle_start}, angle_span={angle_span}, results={results:?}");
+        assert!(!angle_is_in_range(angle_at(results[1] + 2.0 / 1440.0, Feature::SunLongitude), angle_start, angle_span), "angle_start={angle_start}, angle_span={angle_span}, results={results:?}");
+    }
+}
+
+#[test]
+fn accepts_a_full_circle_constraint() {
+    const SEARCH_START: f64 = 2_451_544.5;
+    const SEARCH_END: f64 = 2_451_910.5;
+
+    assert_eq!(search_refined_windows(SEARCH_START, SEARCH_END, &[Feature::SunLongitude as u8], &[0.0], &[360.0]), vec![SEARCH_START, SEARCH_END]);
+}
+
+#[test]
+fn finds_narrow_angular_constraints_for_every_feature() {
+    const SELECTED_DATE: f64 = 2_451_727.5; // 2000-07-02
+
+    for feature_id in [0, 1, 3, 4, 5, 6, 7, 10] {
+        let feature = feature_from_id(feature_id);
+        let selected_angle = angle_at(SELECTED_DATE, feature);
+        let angle_start = (selected_angle - 0.5).rem_euclid(360.0);
+        let angle_span = 1.0;
+        let search_radius = coarse_step_for_feature(feature) * 2.0;
+        let results = search_refined_windows(SELECTED_DATE - search_radius, SELECTED_DATE + search_radius, &[feature_id], &[angle_start], &[angle_span]);
+
+        assert!(date_is_in_results(SELECTED_DATE, &results), "feature={feature:?}, angle_start={angle_start}, angle_span={angle_span}, results={results:?}");
+        for window in results.chunks_exact(2) {
+            let midpoint = (window[0] + window[1]) * 0.5;
+            assert!(angle_is_in_range(angle_at(midpoint, feature), angle_start, angle_span), "feature={feature:?}, angle_start={angle_start}, angle_span={angle_span}, results={results:?}");
+        }
+    }
 }
 
 #[test]
 fn treats_returned_windows_as_half_open() {
-    let results = search_refined_windows(2_453_371.5, 2_453_736.5, &[10], &[5]); // Sun in Virgo
+    let results = search_sign_windows(2_453_371.5, 2_453_736.5, &[10], &[5]); // Sun in Virgo
 
     assert_eq!(results.len(), 2);
     assert!(date_is_in_results(results[0], &results));
@@ -109,16 +177,14 @@ fn merges_only_adjacent_or_overlapping_windows() {
 
 #[test]
 fn uses_safe_coarse_step_for_each_supported_feature() {
-    assert_eq!(coarse_step_for_feature(0), 3.5);
-    assert_eq!(coarse_step_for_feature(1), 12.0);
-    assert_eq!(coarse_step_for_feature(3), 18.0);
-    assert_eq!(coarse_step_for_feature(4), 60.0);
-    assert_eq!(coarse_step_for_feature(5), 67.0);
-    assert_eq!(coarse_step_for_feature(6), 75.0);
-    assert_eq!(coarse_step_for_feature(7), 78.0);
-    assert_eq!(coarse_step_for_feature(10), 28.0);
-    assert_eq!(coarse_step_for_feature(2), 1.0);
-    assert_eq!(coarse_step_for_feature(255), 1.0);
+    assert_eq!(coarse_step_for_feature(Feature::MercuryLongitude), 3.5);
+    assert_eq!(coarse_step_for_feature(Feature::VenusLongitude), 12.0);
+    assert_eq!(coarse_step_for_feature(Feature::MarsLongitude), 18.0);
+    assert_eq!(coarse_step_for_feature(Feature::JupiterLongitude), 60.0);
+    assert_eq!(coarse_step_for_feature(Feature::SaturnLongitude), 67.0);
+    assert_eq!(coarse_step_for_feature(Feature::UranusLongitude), 75.0);
+    assert_eq!(coarse_step_for_feature(Feature::NeptuneLongitude), 78.0);
+    assert_eq!(coarse_step_for_feature(Feature::SunLongitude), 28.0);
 }
 
 #[test]
@@ -133,16 +199,22 @@ fn brackets_only_stations_inside_a_coarse_segment() {
 
 #[test]
 fn validates_every_search_input() {
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[5]).is_ok());
-    assert!(validate_search_inputs(f64::NAN, 2_453_736.5, &[10], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, f64::INFINITY, &[10], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_736.5, 2_453_371.5, &[10], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_371.5, &[10], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[], &[]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10, 0], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[2], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[11], &[5]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[12]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[150.0], &[30.0]).is_ok());
+    assert!(validate_search_inputs(f64::NAN, 2_453_736.5, &[10], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, f64::INFINITY, &[10], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_736.5, 2_453_371.5, &[10], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_371.5, &[10], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[], &[], &[]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10, 0], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[150.0, 0.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[2], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[11], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[f64::NAN], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[-1.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[360.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[150.0], &[f64::NAN]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[150.0], &[0.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[150.0], &[360.1]).is_err());
 }
 
 #[test]
@@ -175,7 +247,7 @@ fn refines_prograde_and_retrograde_zero_crossings() {
 
     for crossing_range in [prograde_crossing, retrograde_crossing] {
         let (start, end) = crossing_range.expect("expected Mercury to cross 0° in both directions");
-        let crossing = bisection_value_find(start, end, 0.0, 0);
+        let crossing = bisection_value_find(start, end, 0.0, Feature::MercuryLongitude);
         let longitude = geocentric_longitude(crossing, 0);
         assert!(angular_difference(longitude, 0.0).abs() < 0.001);
     }
@@ -195,8 +267,9 @@ fn matches_reference_retrograde_stations() {
     ];
 
     for (feature_id, bracket_start, bracket_end, reference_date) in cases {
-        assert!(segment_has_interior_station(instantaneous_velocity(bracket_start, feature_id), instantaneous_velocity(bracket_end, feature_id)));
-        let station_date = bisection_derivative_find_zero(bracket_start, bracket_end, feature_id);
+        let feature = feature_from_id(feature_id);
+        assert!(segment_has_interior_station(instantaneous_velocity(bracket_start, feature), instantaneous_velocity(bracket_end, feature)));
+        let station_date = bisection_derivative_find_zero(bracket_start, bracket_end, feature);
         assert!((station_date - reference_date).abs() < 0.5, "feature_id={feature_id}, station_date={station_date}, reference_date={reference_date}");
     }
 }
@@ -206,7 +279,7 @@ fn returns_separate_sign_windows_during_mercury_retrograde() {
     const SEARCH_START: f64 = 2_460_511.5; // 2024-07-20
     const SEARCH_END: f64 = 2_460_568.5; // 2024-09-15
 
-    let results = search_refined_windows(SEARCH_START, SEARCH_END, &[0], &[5]); // Mercury in Virgo
+    let results = search_sign_windows(SEARCH_START, SEARCH_END, &[0], &[5]); // Mercury in Virgo
     let context = format!("2024 Mercury retrograde results={results:?}");
 
     assert_eq!(results.len(), 4, "expected separate Virgo entries around the 2024 Mercury retrograde; results={results:?}");
@@ -222,7 +295,7 @@ fn clips_open_window_to_search_boundaries() {
     let search_start = 2_466_674.835_774_712;
     let search_end = 2_468_099.372_874_511;
 
-    let results = search_refined_windows(search_start, search_end, &[6], &[4]); // Uranus in Leo
+    let results = search_sign_windows(search_start, search_end, &[6], &[4]); // Uranus in Leo
 
     assert_eq!(results, vec![search_start, search_end]);
 }
@@ -233,9 +306,9 @@ fn clips_adjacent_partition_results_to_the_same_boundary() {
     let partition = 2_453_620.5;
     let search_end = 2_453_736.5; // 2006-01-01
 
-    let complete = search_refined_windows(search_start, search_end, &[10], &[5]); // Sun in Virgo
-    let left = search_refined_windows(search_start, partition, &[10], &[5]);
-    let right = search_refined_windows(partition, search_end, &[10], &[5]);
+    let complete = search_sign_windows(search_start, search_end, &[10], &[5]); // Sun in Virgo
+    let left = search_sign_windows(search_start, partition, &[10], &[5]);
+    let right = search_sign_windows(partition, search_end, &[10], &[5]);
 
     assert_eq!(complete.len(), 2);
     assert_eq!(left.len(), 2);
@@ -254,8 +327,8 @@ fn searches_sun_before_other_features_regardless_of_input_order() {
     let mercury_sign = (geocentric_longitude(selected_date, 0) / 30.0) as u8;
     let sun_sign = (geocentric_longitude(selected_date, 10) / 30.0) as u8;
 
-    let sun_first = search_refined_windows(search_start, search_end, &[10, 0], &[sun_sign, mercury_sign]);
-    let sun_last = search_refined_windows(search_start, search_end, &[0, 10], &[mercury_sign, sun_sign]);
+    let sun_first = search_sign_windows(search_start, search_end, &[10, 0], &[sun_sign, mercury_sign]);
+    let sun_last = search_sign_windows(search_start, search_end, &[0, 10], &[mercury_sign, sun_sign]);
 
     assert_eq!(sun_last, sun_first);
 }
@@ -266,10 +339,10 @@ fn sun_fast_path_matches_daily_evaluation_for_every_sign() {
     let search_end = 2_451_910.5; // 2001-01-01
 
     for sign in 0..12 {
-        let results = search_refined_windows(search_start, search_end, &[10], &[sign]);
+        let results = search_sign_windows(search_start, search_end, &[10], &[sign]);
         let mut date = search_start;
         while date < search_end {
-            let expected = longitude_is_in_sign(geocentric_longitude(date, 10), sign);
+            let expected = angle_is_in_range(geocentric_longitude(date, 10), sign as f64 * 30.0, 30.0);
             let actual = date_is_in_results(date, &results);
             assert_eq!(actual, expected, "Sun sign={sign}, julian_date={date}, results={results:?}");
             date += 1.0;
@@ -291,13 +364,14 @@ fn profile_search_execution() {
     black_box(geocentric_longitude(PROFILE_MIDPOINT, 0));
     let first_evaluation_time = first_evaluation_start.elapsed();
 
-    black_box(search_refined_windows(PROFILE_START, PROFILE_START + 365.0, &[10], &[0]));
+    black_box(search_sign_windows(PROFILE_START, PROFILE_START + 365.0, &[10], &[0]));
 
     let validation_feature_ids = [10];
-    let validation_feature_signs = [0];
+    let validation_angle_starts = [0.0];
+    let validation_angle_spans = [30.0];
     let validation_start = Instant::now();
     for _ in 0..100_000 {
-        black_box(validate_search_inputs(black_box(PROFILE_START), black_box(PROFILE_END), black_box(&validation_feature_ids), black_box(&validation_feature_signs)).unwrap());
+        black_box(validate_search_inputs(black_box(PROFILE_START), black_box(PROFILE_END), black_box(&validation_feature_ids), black_box(&validation_angle_starts), black_box(&validation_angle_spans)).unwrap());
     }
     let validation_time = validation_start.elapsed();
 
@@ -316,13 +390,13 @@ fn profile_search_execution() {
     for feature_id in FEATURE_IDS {
         let feature_sign = (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8;
         let started = Instant::now();
-        let results = black_box(search_refined_windows(PROFILE_START, PROFILE_END, &[feature_id], &[feature_sign]));
-        eprintln!("single feature {feature_id}: {:?}, {} day coarse step, {} windows", started.elapsed(), coarse_step_for_feature(feature_id), results.len() / 2);
+        let results = black_box(search_sign_windows(PROFILE_START, PROFILE_END, &[feature_id], &[feature_sign]));
+        eprintln!("single feature {feature_id}: {:?}, {} day coarse step, {} windows", started.elapsed(), coarse_step_for_feature(feature_from_id(feature_id)), results.len() / 2);
     }
 
     let feature_signs: Vec<u8> = FEATURE_IDS.iter().map(|&feature_id| (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
     let total_search_start = Instant::now();
-    let total_results = black_box(search_refined_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs));
+    let total_results = black_box(search_sign_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs));
     let total_search_time = total_search_start.elapsed();
 
     let mut windows = vec![(PROFILE_START, PROFILE_END)];
@@ -332,7 +406,7 @@ fn profile_search_execution() {
         let stage_start = Instant::now();
         let mut filtered_windows = Vec::new();
         for &(window_start, window_end) in &windows {
-            filter_window_for_feature(window_start, window_end, feature_id, feature_sign, &mut filtered_windows);
+            filter_window_for_constraint(window_start, window_end, feature_from_id(feature_id), feature_sign as f64 * 30.0, 30.0, &mut filtered_windows);
         }
         merge_adjacent_or_overlapping_windows(&mut filtered_windows);
         let stage_time = stage_start.elapsed();
@@ -345,9 +419,9 @@ fn profile_search_execution() {
 
     let sun_last_feature_ids = [0, 1, 3, 4, 5, 6, 7, 10];
     let sun_last_feature_signs: Vec<u8> = sun_last_feature_ids.iter().map(|&feature_id| (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
-    profile_repeated("repeated Sun only search", 10, || { black_box(search_refined_windows(PROFILE_START, PROFILE_END, &[10], &[feature_signs[0]])); });
-    profile_repeated("repeated eight feature Sun first search", 10, || { black_box(search_refined_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs)); });
-    profile_repeated("repeated eight feature Sun last search", 10, || { black_box(search_refined_windows(PROFILE_START, PROFILE_END, &sun_last_feature_ids, &sun_last_feature_signs)); });
+    profile_repeated("repeated Sun only search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &[10], &[feature_signs[0]])); });
+    profile_repeated("repeated eight feature Sun first search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs)); });
+    profile_repeated("repeated eight feature Sun last search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &sun_last_feature_ids, &sun_last_feature_signs)); });
 }
 
 #[test]
@@ -403,7 +477,7 @@ fn randomized_search_matches_direct_evaluation() {
 
     let mut random_state = 0x4e41_5441_4c43_4841_u64;
     let warm_up_start = Instant::now();
-    black_box(search_refined_windows(2_451_544.5, 2_451_909.5, &[10], &[0]));
+    black_box(search_sign_windows(2_451_544.5, 2_451_909.5, &[10], &[0]));
     let warm_up_time = warm_up_start.elapsed();
     let mut total_search_time = Duration::ZERO;
     let mut total_boundary_check_time = Duration::ZERO;
@@ -429,7 +503,7 @@ fn randomized_search_matches_direct_evaluation() {
         let feature_signs: Vec<u8> = feature_ids.iter().map(|&feature_id| (geocentric_longitude(selected_date, feature_id) / 30.0) as u8).collect();
 
         let search_timer = Instant::now();
-        let results = search_refined_windows(search_start, search_end, feature_ids, &feature_signs);
+        let results = search_sign_windows(search_start, search_end, feature_ids, &feature_signs);
         total_search_time += search_timer.elapsed();
         let context = format!("case={case_index}, selected_date={selected_date}, search=[{search_start}, {search_end}], feature_ids={feature_ids:?}, feature_signs={feature_signs:?}, results={results:?}");
 

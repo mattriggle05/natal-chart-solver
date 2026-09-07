@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Feature } from '../types/features';
 
 export interface SearchParams {
     startJd: number;
     endJd: number;
-    featureIds: number[];
-    featureSigns: number[];
+    featureIds: Feature[];
+    angleStarts: number[];
+    angleSpans: number[];
 }
 
 export function useDataSearch() {

@@ -1,4 +1,5 @@
 import { useDataSearch } from '../hooks/useDateSearch';
+import { Feature } from '../types/features';
 import styles from './SearchBox.module.css';
 
 function jdToDate(jd: number): string {
@@ -35,8 +36,9 @@ function SearchBox() {
         search({
             startJd: jde1,
             endJd: jde2,
-            featureIds: [10],
-            featureSigns: [5]
+            featureIds: [Feature.Sun],
+            angleStarts: [5 * 30],
+            angleSpans: [30]
         });
     }
 
