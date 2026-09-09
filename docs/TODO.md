@@ -33,7 +33,8 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [ ] Validate geocentric longitude calculations against JPL Horizons or another authoritative ephemeris across representative dates.
 - [ ] Verify all supported planets near sign boundaries and retrograde stations.
 - [x] Resolve the apparent `vsop87d` solar-system-display offset as an expected coordinate-frame difference.
-- [ ] Implement Moon longitude with a documented astronomical model and accuracy range.
+- [x] Implement Moon longitude with a documented astronomical model and accuracy range.
+- [x] Implement Moon phase angle as a searchable angular constraint.
 - [ ] Implement Pluto longitude with a documented astronomical model and accuracy range.
 - [ ] Decide whether Chiron, the North Node, Lilith, and other chart points are release requirements.
 - [ ] Implement every additional release-required chart point and document whether it is true, mean, or otherwise derived.
@@ -44,6 +45,7 @@ This checklist defines the work required for Natal Chart Solver to be considered
 
 - [x] Replace the fixed one-day coarse step with verified per-body safe step sizes.
 - [x] Add repeatable release profiling for initialization, validation, VSOP evaluation, per-feature filtering, and complete searches.
+- [x] Benchmark Moon longitude and Moon phase searches and verify their production WASM size impact.
 - [x] Reuse endpoint velocities between adjacent coarse segments.
 - [x] Skip station and velocity calculations for the monotonic Sun.
 - [x] Increase the monotonic Sun step without permitting a skipped sign.
@@ -83,6 +85,9 @@ This checklist defines the work required for Natal Chart Solver to be considered
 - [x] Add tests for stations, exact boundaries, range endpoints, and 0°/360° wraparound.
 - [x] Add tests for malformed arrays, invalid IDs, invalid angles, reversed ranges, and non-finite values.
 - [x] Add golden-data tests using authoritative ephemeris values.
+- [x] Verify Moon longitude and phase angle against JPL Horizons across the supported centuries.
+- [x] Verify principal Moon phase times against NASA GSFC reference data.
+- [x] Include Moon longitude and Moon phase angle in randomized end-to-end search verification.
 - [x] Add property tests asserting sorted, nonoverlapping windows whose sampled interiors satisfy all requested angular constraints.
 - [x] Compare optimized search results against a small-step brute-force reference implementation.
 - [ ] Add TypeScript tests for Julian-date conversion and result formatting.

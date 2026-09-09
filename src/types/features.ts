@@ -1,5 +1,5 @@
 export enum Feature {
-    // Planets (all in vsop87)
+    // Planetary longitudes from VSOP87
     Mercury = 0,
     Venus = 1,
     Earth = 2,
@@ -9,15 +9,18 @@ export enum Feature {
     Uranus = 6,
     Neptune = 7,
 
-    // Solar system bodies in vsop87
+    // Other searchable body longitudes
     Sun = 10,
     Moon = 11,
 
-    // objects not in vsop87
+    // Unsupported objects
     Pluto = 12,
     Chiron = 15,
 
-    // calculated points
+    // Unsupported calculated points
     NorthNode = 13,
     Lilith = 14,
+
+    // Derived searchable features
+    MoonPhaseAngle = 16,
 }

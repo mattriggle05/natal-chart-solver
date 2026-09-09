@@ -110,13 +110,15 @@ All search calculations use **geocentric ecliptic longitude** — the geometric 
 planet as seen from Earth, measured in degrees along the ecliptic plane (0-360°).
 This matches the tropical zodiac used in astrology.
 
-### VSOP87 Variants Used
-The `vsop87` Rust crate provides several variants. We use:
+### Astronomical Models
+The `vsop87` Rust crate provides the planetary and solar models. The `astro` Rust crate
+provides the lunar model. We use:
 
 | Module | Coordinates | Frame | Used For |
 |--------|-------------|-------|----------|
 | `vsop87c` | Heliocentric rectangular | Ecliptic of date | Geocentric calculations (search) |
 | `vsop87d` | Heliocentric spherical | Ecliptic of date | Sun longitude (earth + 180°) and solar system display model |
+| `astro::lunar` | Geocentric spherical | Mean ecliptic and equinox of date | Moon longitude |
 
 **Why ecliptic of date (vsop87c/d) over J2000 (vsop87a/b)?**
 The tropical zodiac is defined relative to the vernal equinox of the current date, not
@@ -142,6 +144,25 @@ For the Sun:
 longitude = (vsop87d::earth(jd).longitude().to_degrees() + 180°).rem_euclid(360°)
 ```
 
+For the Moon, `astro::lunar::geocent_ecl_pos` uses the principal terms of the Chapront
+ELP-2000/82 lunar theory. Its documented longitude accuracy is 10 arcseconds. Direct
+checks against NASA JPL Horizons DE441 remain within 0.02° at representative dates in
+1900, 2000, and 2100.
+
+Moon phase is represented as the Moon's elongation from the Sun:
+```
+phase_angle = (moon_longitude - sun_longitude).rem_euclid(360°)
+```
+The principal phase angles are 0° new Moon, 90° first quarter, 180° full Moon, and
+270° last quarter. This is a derived angular feature and uses the same generic angular
+constraint interface as body longitude.
+
+The lunar model and both lunar feature search paths are verified over the supported
+1900–2100 range. A daily scan confirms that Moon longitude and phase angle remain
+prograde, while every 10-day coarse segment remains below the 180° unwrapping limit.
+Reference tests cover JPL Horizons longitudes and phase angles at 1900, 2000, and 2100,
+plus all four principal NASA GSFC phase times in a 2024 lunation.
+
 ### Planet/Feature ID Scheme
 ```
 0  = Mercury
@@ -153,9 +174,10 @@ longitude = (vsop87d::earth(jd).longitude().to_degrees() + 180°).rem_euclid(360
 6  = Uranus
 7  = Neptune
 10 = Sun
+11 = Moon
+16 = Moon phase angle
 ```
-IDs 8, 9 are intentionally unused (reserved). The Moon and Pluto are not currently
-implemented (see Future Work).
+IDs 8 and 9 are intentionally unused (reserved). Pluto is not currently implemented.
 
 ### Angular Constraints
 The backend does not represent zodiac signs. It searches half-open angular arcs defined
@@ -218,6 +240,8 @@ internal search algorithm to be replaced later.
 **Current conservative coarse steps (per planet):**
 ```
 Sun:     28 days
+Moon:    10 days
+Moon phase angle: 10 days
 Mercury: 3.5 days
 Venus:   12 days
 Mars:    18 days
@@ -234,8 +258,9 @@ Neptune: 78 days
 pub fn angle_at(julian_date: f64, feature: Feature) -> f64
 ```
 Returns the selected feature's angle in degrees `[0°, 360°)` at a given Julian date.
-The current features are geocentric body longitudes. The `Feature` enum prevents an
-unsupported numeric ID from reaching astronomical evaluation after input validation.
+The current features are geocentric body longitudes and the derived Moon phase angle.
+The `Feature` enum prevents an unsupported numeric ID from reaching astronomical
+evaluation after input validation.
 
 Earth (`vsop87c::earth`) is computed once and reused for all planet calculations in a
 single call to avoid redundant VSOP87 evaluations.
@@ -414,6 +439,8 @@ both boundaries can be detected between samples.
 | Planet | Current step |
 |--------|--------------|
 | Sun    | 28d          |
+| Moon   | 10d          |
+| Moon phase angle | 10d |
 | Mercury| 3.5d         |
 | Venus  | 12d          |
 | Mars   | 18d          |
@@ -421,6 +448,14 @@ both boundaries can be detected between samples.
 | Saturn | 67d          |
 | Uranus | 75d          |
 | Neptune| 78d          |
+
+Native release profiling over 2000–2010 measured a standalone Moon-longitude sign
+search at approximately 12 ms and a standalone Moon-phase sign search at approximately
+360 ms. The latter includes the existing VSOP87 Sun calculation. In a ten-feature
+query with the Sun evaluated first, the Moon-longitude and Moon-phase stages took
+approximately 1 ms and 12 ms respectively because they operated on already narrowed
+windows. Adding the lunar model increased the optimized WASM from 1,965.54 kB to
+1,971.30 kB, an increase of 5.76 kB (0.29%).
 
 ---
 
@@ -444,10 +479,6 @@ coordination is sufficient.
 **7. Dynamic worker count based on device capability**
 Use `navigator.hardwareConcurrency` and `navigator.deviceMemory` to choose worker
 count. Run a micro-benchmark on first load and cache result in localStorage.
-
-**8. Moon support**
-ELP2000 series for the Moon — no maintained Rust crate exists. Implement the
-truncated series from Meeus Ch. 47 (~60 terms) manually in Rust.
 
 **9. Pluto support**
 Small dedicated series from Meeus Ch. 37 (~40 terms). Manual implementation.
@@ -499,6 +530,7 @@ natal chart position rather than selecting a sign from a dropdown.
 ```toml
 wasm-bindgen = "0.2"
 vsop87 = "2.1"
+astro = "2.0"
 ```
 
 ### TypeScript (package.json)

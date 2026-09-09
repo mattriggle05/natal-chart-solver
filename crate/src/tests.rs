@@ -6,7 +6,7 @@ fn feature_from_id(feature_id: u8) -> Feature {
     Feature::try_from(feature_id).expect("supported test feature")
 }
 
-fn geocentric_longitude(julian_date: f64, feature_id: u8) -> f64 {
+fn feature_angle(julian_date: f64, feature_id: u8) -> f64 {
     angle_at(julian_date, feature_from_id(feature_id))
 }
 
@@ -17,7 +17,7 @@ fn search_sign_windows(start_julian_date: f64, end_julian_date: f64, feature_ids
 }
 
 fn date_is_valid(julian_date: f64, feature_ids: &[u8], feature_signs: &[u8]) -> bool {
-    feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| angle_is_in_range(geocentric_longitude(julian_date, feature_id), feature_sign as f64 * 30.0, 30.0))
+    feature_ids.iter().zip(feature_signs).all(|(&feature_id, &feature_sign)| angle_is_in_range(feature_angle(julian_date, feature_id), feature_sign as f64 * 30.0, 30.0))
 }
 
 fn date_is_in_results(julian_date: f64, results: &[f64]) -> bool {
@@ -98,9 +98,92 @@ fn matches_reference_sun_longitudes_across_supported_centuries() {
     ];
 
     for (julian_date, reference_longitude) in cases {
-        let longitude = geocentric_longitude(julian_date, 10);
+        let longitude = feature_angle(julian_date, 10);
         let difference = angular_difference(longitude, reference_longitude).abs();
         assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, longitude={longitude}, reference_longitude={reference_longitude}, difference={difference}");
+    }
+}
+
+#[test]
+fn matches_reference_moon_longitudes_across_supported_centuries() {
+    // NASA JPL Horizons DE441 apparent geocentric ecliptic-of-date longitude, quantity 31.
+    // The tolerance covers nutation, light-time, and model differences from the mean geometric longitude.
+    const MAX_DIFFERENCE_DEGREES: f64 = 0.02;
+    let cases = [
+        (2_415_021.0, 279.616_644_4), // 1900-01-01 12:00 TT
+        (2_451_545.0, 223.314_855_7), // 2000-01-01 12:00 TT
+        (2_488_070.0, 164.412_513_6), // 2100-01-01 12:00 TT
+    ];
+
+    for (julian_date, reference_longitude) in cases {
+        let longitude = feature_angle(julian_date, Feature::MoonLongitude as u8);
+        let difference = angular_difference(longitude, reference_longitude).abs();
+        assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, longitude={longitude}, reference_longitude={reference_longitude}, difference={difference}");
+    }
+}
+
+#[test]
+fn matches_reference_moon_phase_angles_across_supported_centuries() {
+    // Differences between the NASA JPL Horizons Moon and Sun quantity 31 longitudes.
+    const MAX_DIFFERENCE_DEGREES: f64 = 0.03;
+    let cases = [
+        (2_415_021.0, 358.953_400_6),
+        (2_451_545.0, 302.946_703_8),
+        (2_488_070.0, 243.299_678_3),
+    ];
+
+    for (julian_date, reference_phase_angle) in cases {
+        let phase_angle = angle_at(julian_date, Feature::MoonPhaseAngle);
+        let difference = angular_difference(phase_angle, reference_phase_angle).abs();
+        assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, phase_angle={phase_angle}, reference_phase_angle={reference_phase_angle}, difference={difference}");
+    }
+}
+
+#[test]
+fn matches_reference_2024_moon_phase_times() {
+    // NASA GSFC phase times in UTC. The 15-minute tolerance includes UTC-to-TT conversion
+    // and the documented accuracy of the lunar and solar position models.
+    const MAX_DIFFERENCE_DAYS: f64 = 15.0 / 1440.0;
+    let cases = [
+        (0.0, 2_460_409.264_583_333_4),   // New Moon, 2024-04-08 18:21 UTC
+        (90.0, 2_460_416.300_694_444),   // First Quarter, 2024-04-15 19:13 UTC
+        (180.0, 2_460_424.492_361_111),  // Full Moon, 2024-04-23 23:49 UTC
+        (270.0, 2_460_431.977_083_333_3), // Last Quarter, 2024-05-01 11:27 UTC
+    ];
+
+    for (target_phase_angle, reference_date) in cases {
+        let phase_date = bisection_value_find(reference_date - 1.0, reference_date + 1.0, target_phase_angle, Feature::MoonPhaseAngle);
+        assert!((phase_date - reference_date).abs() < MAX_DIFFERENCE_DAYS, "target_phase_angle={target_phase_angle}, phase_date={phase_date}, reference_date={reference_date}");
+    }
+}
+
+#[test]
+fn moon_features_are_monotonic_with_safe_steps_across_supported_centuries() {
+    const START_JD: f64 = 2_415_020.5; // 1900-01-01
+    const END_JD: f64 = 2_488_069.5; // 2100-01-01
+
+    for feature in [Feature::MoonLongitude, Feature::MoonPhaseAngle] {
+        let mut previous_date = START_JD;
+        let mut previous_angle = angle_at(previous_date, feature);
+        while previous_date < END_JD {
+            let current_date = (previous_date + 1.0).min(END_JD);
+            let current_angle = angle_at(current_date, feature);
+            assert!(angular_difference(current_angle, previous_angle) > 0.0, "feature={feature:?}, previous_date={previous_date}, current_date={current_date}, previous_angle={previous_angle}, current_angle={current_angle}");
+            previous_date = current_date;
+            previous_angle = current_angle;
+        }
+
+        let step = coarse_step_for_feature(feature);
+        let mut segment_start = START_JD;
+        let mut start_angle = angle_at(segment_start, feature);
+        while segment_start < END_JD {
+            let segment_end = (segment_start + step).min(END_JD);
+            let end_angle = angle_at(segment_end, feature);
+            let displacement = angular_difference(end_angle, start_angle);
+            assert!(displacement > 0.0 && displacement < 180.0, "feature={feature:?}, segment_start={segment_start}, segment_end={segment_end}, displacement={displacement}");
+            segment_start = segment_end;
+            start_angle = end_angle;
+        }
     }
 }
 
@@ -108,8 +191,8 @@ fn matches_reference_sun_longitudes_across_supported_centuries() {
 fn returns_exact_value_boundaries_at_bisection_endpoints() {
     let start = 2_453_371.5;
     let end = start + 1.0;
-    let start_longitude = geocentric_longitude(start, 10);
-    let end_longitude = geocentric_longitude(end, 10);
+    let start_longitude = feature_angle(start, 10);
+    let end_longitude = feature_angle(end, 10);
 
     assert_eq!(bisection_value_find(start, end, start_longitude, Feature::SunLongitude), start);
     assert_eq!(bisection_value_find(start, end, end_longitude, Feature::SunLongitude), end);
@@ -141,7 +224,7 @@ fn accepts_a_full_circle_constraint() {
 fn finds_narrow_angular_constraints_for_every_feature() {
     const SELECTED_DATE: f64 = 2_451_727.5; // 2000-07-02
 
-    for feature_id in [0, 1, 3, 4, 5, 6, 7, 10] {
+    for feature_id in [0, 1, 3, 4, 5, 6, 7, 10, 11, 16] {
         let feature = feature_from_id(feature_id);
         let selected_angle = angle_at(SELECTED_DATE, feature);
         let angle_start = (selected_angle - 0.5).rem_euclid(360.0);
@@ -185,6 +268,8 @@ fn uses_safe_coarse_step_for_each_supported_feature() {
     assert_eq!(coarse_step_for_feature(Feature::UranusLongitude), 75.0);
     assert_eq!(coarse_step_for_feature(Feature::NeptuneLongitude), 78.0);
     assert_eq!(coarse_step_for_feature(Feature::SunLongitude), 28.0);
+    assert_eq!(coarse_step_for_feature(Feature::MoonLongitude), 10.0);
+    assert_eq!(coarse_step_for_feature(Feature::MoonPhaseAngle), 10.0);
 }
 
 #[test]
@@ -208,7 +293,9 @@ fn validates_every_search_input() {
     assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10, 0], &[150.0], &[30.0]).is_err());
     assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[150.0, 0.0], &[30.0]).is_err());
     assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[2], &[150.0], &[30.0]).is_err());
-    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[11], &[150.0], &[30.0]).is_err());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[11], &[150.0], &[30.0]).is_ok());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[16], &[150.0], &[30.0]).is_ok());
+    assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[12], &[150.0], &[30.0]).is_err());
     assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[f64::NAN], &[30.0]).is_err());
     assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[-1.0], &[30.0]).is_err());
     assert!(validate_search_inputs(2_453_371.5, 2_453_736.5, &[10], &[360.0], &[30.0]).is_err());
@@ -220,13 +307,13 @@ fn validates_every_search_input() {
 #[test]
 fn refines_prograde_and_retrograde_zero_crossings() {
     let mut previous_date = 2_451_544.5; // 2000-01-01
-    let mut previous_longitude = geocentric_longitude(previous_date, 0); // Mercury
+    let mut previous_longitude = feature_angle(previous_date, 0); // Mercury
     let mut prograde_crossing = None;
     let mut retrograde_crossing = None;
 
     for day in 1..=(365 * 50) {
         let current_date = 2_451_544.5 + day as f64;
-        let current_longitude = geocentric_longitude(current_date, 0);
+        let current_longitude = feature_angle(current_date, 0);
         let displacement = angular_difference(current_longitude, previous_longitude);
 
         if previous_longitude > 330.0 && current_longitude < 30.0 && displacement > 0.0 {
@@ -248,7 +335,7 @@ fn refines_prograde_and_retrograde_zero_crossings() {
     for crossing_range in [prograde_crossing, retrograde_crossing] {
         let (start, end) = crossing_range.expect("expected Mercury to cross 0° in both directions");
         let crossing = bisection_value_find(start, end, 0.0, Feature::MercuryLongitude);
-        let longitude = geocentric_longitude(crossing, 0);
+        let longitude = feature_angle(crossing, 0);
         assert!(angular_difference(longitude, 0.0).abs() < 0.001);
     }
 }
@@ -324,8 +411,8 @@ fn searches_sun_before_other_features_regardless_of_input_order() {
     let search_start = 2_451_544.5; // 2000-01-01
     let search_end = 2_451_910.5; // 2001-01-01
     let selected_date = (search_start + search_end) * 0.5;
-    let mercury_sign = (geocentric_longitude(selected_date, 0) / 30.0) as u8;
-    let sun_sign = (geocentric_longitude(selected_date, 10) / 30.0) as u8;
+    let mercury_sign = (feature_angle(selected_date, 0) / 30.0) as u8;
+    let sun_sign = (feature_angle(selected_date, 10) / 30.0) as u8;
 
     let sun_first = search_sign_windows(search_start, search_end, &[10, 0], &[sun_sign, mercury_sign]);
     let sun_last = search_sign_windows(search_start, search_end, &[0, 10], &[mercury_sign, sun_sign]);
@@ -342,7 +429,7 @@ fn sun_fast_path_matches_daily_evaluation_for_every_sign() {
         let results = search_sign_windows(search_start, search_end, &[10], &[sign]);
         let mut date = search_start;
         while date < search_end {
-            let expected = angle_is_in_range(geocentric_longitude(date, 10), sign as f64 * 30.0, 30.0);
+            let expected = angle_is_in_range(feature_angle(date, 10), sign as f64 * 30.0, 30.0);
             let actual = date_is_in_results(date, &results);
             assert_eq!(actual, expected, "Sun sign={sign}, julian_date={date}, results={results:?}");
             date += 1.0;
@@ -358,10 +445,10 @@ fn profile_search_execution() {
     const PROFILE_START: f64 = 2_451_544.5; // 2000-01-01
     const PROFILE_END: f64 = 2_455_197.5; // 2010-01-01
     const PROFILE_MIDPOINT: f64 = (PROFILE_START + PROFILE_END) * 0.5;
-    const FEATURE_IDS: [u8; 8] = [10, 0, 1, 3, 4, 5, 6, 7];
+    const FEATURE_IDS: [u8; 10] = [10, 11, 16, 0, 1, 3, 4, 5, 6, 7];
 
     let first_evaluation_start = Instant::now();
-    black_box(geocentric_longitude(PROFILE_MIDPOINT, 0));
+    black_box(feature_angle(PROFILE_MIDPOINT, 0));
     let first_evaluation_time = first_evaluation_start.elapsed();
 
     black_box(search_sign_windows(PROFILE_START, PROFILE_START + 365.0, &[10], &[0]));
@@ -382,19 +469,19 @@ fn profile_search_execution() {
     for feature_id in FEATURE_IDS {
         let evaluations_started = Instant::now();
         for offset in 0..100 {
-            black_box(geocentric_longitude(PROFILE_MIDPOINT + offset as f64, feature_id));
+            black_box(feature_angle(PROFILE_MIDPOINT + offset as f64, feature_id));
         }
         eprintln!("100 warmed feature {feature_id} longitude evaluations: {:?}", evaluations_started.elapsed());
     }
 
     for feature_id in FEATURE_IDS {
-        let feature_sign = (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8;
+        let feature_sign = (feature_angle(PROFILE_MIDPOINT, feature_id) / 30.0) as u8;
         let started = Instant::now();
         let results = black_box(search_sign_windows(PROFILE_START, PROFILE_END, &[feature_id], &[feature_sign]));
         eprintln!("single feature {feature_id}: {:?}, {} day coarse step, {} windows", started.elapsed(), coarse_step_for_feature(feature_from_id(feature_id)), results.len() / 2);
     }
 
-    let feature_signs: Vec<u8> = FEATURE_IDS.iter().map(|&feature_id| (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
+    let feature_signs: Vec<u8> = FEATURE_IDS.iter().map(|&feature_id| (feature_angle(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
     let total_search_start = Instant::now();
     let total_results = black_box(search_sign_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs));
     let total_search_time = total_search_start.elapsed();
@@ -414,14 +501,14 @@ fn profile_search_execution() {
         windows = filtered_windows;
     }
 
-    eprintln!("complete eight feature search: {total_search_time:?}, {} windows", total_results.len() / 2);
+    eprintln!("complete ten feature search: {total_search_time:?}, {} windows", total_results.len() / 2);
     eprintln!("sum of separately timed search stages: {:?}, {} windows", staged_search_start.elapsed(), windows.len());
 
-    let sun_last_feature_ids = [0, 1, 3, 4, 5, 6, 7, 10];
-    let sun_last_feature_signs: Vec<u8> = sun_last_feature_ids.iter().map(|&feature_id| (geocentric_longitude(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
+    let sun_last_feature_ids = [11, 16, 0, 1, 3, 4, 5, 6, 7, 10];
+    let sun_last_feature_signs: Vec<u8> = sun_last_feature_ids.iter().map(|&feature_id| (feature_angle(PROFILE_MIDPOINT, feature_id) / 30.0) as u8).collect();
     profile_repeated("repeated Sun only search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &[10], &[feature_signs[0]])); });
-    profile_repeated("repeated eight feature Sun first search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs)); });
-    profile_repeated("repeated eight feature Sun last search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &sun_last_feature_ids, &sun_last_feature_signs)); });
+    profile_repeated("repeated ten feature Sun first search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &FEATURE_IDS, &feature_signs)); });
+    profile_repeated("repeated ten feature Sun last search", 10, || { black_box(search_sign_windows(PROFILE_START, PROFILE_END, &sun_last_feature_ids, &sun_last_feature_signs)); });
 }
 
 #[test]
@@ -432,7 +519,7 @@ fn randomized_search_matches_direct_evaluation() {
     const REFERENCE_STEP_DAYS: f64 = 1.0;
     const REFERENCE_START_JD: f64 = 2_415_020.5; // 1900-01-01
     const REFERENCE_END_JD: f64 = 2_488_069.5; // 2100-01-01
-    const SUPPORTED_FEATURES: [u8; 8] = [0, 1, 3, 4, 5, 6, 7, 10];
+    const SUPPORTED_FEATURES: [u8; 10] = [0, 1, 3, 4, 5, 6, 7, 10, 11, 16];
 
     struct ResolutionSample {
         width_days: f64,
@@ -471,6 +558,8 @@ fn randomized_search_matches_direct_evaluation() {
             6 => "Uranus",
             7 => "Neptune",
             10 => "Sun",
+            11 => "Moon",
+            16 => "Moon phase",
             _ => "Unknown",
         }
     }
@@ -500,7 +589,7 @@ fn randomized_search_matches_direct_evaluation() {
 
         let feature_count = next_random(&mut random_state) as usize % SUPPORTED_FEATURES.len() + 1;
         let feature_ids = &shuffled_features[..feature_count];
-        let feature_signs: Vec<u8> = feature_ids.iter().map(|&feature_id| (geocentric_longitude(selected_date, feature_id) / 30.0) as u8).collect();
+        let feature_signs: Vec<u8> = feature_ids.iter().map(|&feature_id| (feature_angle(selected_date, feature_id) / 30.0) as u8).collect();
 
         let search_timer = Instant::now();
         let results = search_sign_windows(search_start, search_end, feature_ids, &feature_signs);

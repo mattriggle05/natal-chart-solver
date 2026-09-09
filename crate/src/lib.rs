@@ -15,6 +15,8 @@ pub enum Feature {
     UranusLongitude = 6,
     NeptuneLongitude = 7,
     SunLongitude = 10,
+    MoonLongitude = 11,
+    MoonPhaseAngle = 16,
 }
 
 impl TryFrom<u8> for Feature {
@@ -30,6 +32,8 @@ impl TryFrom<u8> for Feature {
             6 => Ok(Self::UranusLongitude),
             7 => Ok(Self::NeptuneLongitude),
             10 => Ok(Self::SunLongitude),
+            11 => Ok(Self::MoonLongitude),
+            16 => Ok(Self::MoonPhaseAngle),
             _ => Err(()),
         }
     }
@@ -113,9 +117,26 @@ fn filter_window_for_constraint(window_start: f64, window_end: f64, feature: Fea
     }
 
     match feature {
-        Feature::SunLongitude => filter_monotonic_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
+        Feature::SunLongitude => filter_sun_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
+        Feature::MoonLongitude => filter_moon_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
+        Feature::MoonPhaseAngle => filter_moon_phase_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
         _ => filter_retrograde_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output),
     }
+}
+
+#[inline(always)]
+fn filter_sun_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
+    filter_monotonic_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output);
+}
+
+#[inline(always)]
+fn filter_moon_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
+    filter_monotonic_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output);
+}
+
+#[inline(always)]
+fn filter_moon_phase_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
+    filter_monotonic_window_for_constraint(window_start, window_end, feature, angle_start, angle_span, output);
 }
 
 fn filter_retrograde_window_for_constraint(window_start: f64, window_end: f64, feature: Feature, angle_start: f64, angle_span: f64, output: &mut Vec<(f64, f64)>) {
@@ -248,6 +269,8 @@ pub fn coarse_step_for_feature(feature: Feature) -> f64 {
         Feature::UranusLongitude => 75.0,
         Feature::NeptuneLongitude => 78.0,
         Feature::SunLongitude => 28.0,
+        Feature::MoonLongitude => 10.0,
+        Feature::MoonPhaseAngle => 10.0,
     }
 }
 
@@ -327,8 +350,11 @@ pub fn angular_difference(to: f64, from: f64) -> f64 {
 
 #[inline]
 pub fn angle_at(julian_date: f64, feature: Feature) -> f64 {
-    if feature == Feature::SunLongitude {
-        return (vsop87d::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0);
+    match feature {
+        Feature::SunLongitude => return sun_longitude(julian_date),
+        Feature::MoonLongitude => return moon_longitude(julian_date),
+        Feature::MoonPhaseAngle => return (moon_longitude(julian_date) - sun_longitude(julian_date)).rem_euclid(360.0),
+        _ => {}
     }
 
     let earth: RectangularCoordinates = vsop87c::earth(julian_date);
@@ -340,8 +366,18 @@ pub fn angle_at(julian_date: f64, feature: Feature) -> f64 {
         Feature::SaturnLongitude => longitude_from_observer(earth, vsop87c::saturn(julian_date)),
         Feature::UranusLongitude => longitude_from_observer(earth, vsop87c::uranus(julian_date)),
         Feature::NeptuneLongitude => longitude_from_observer(earth, vsop87c::neptune(julian_date)),
-        Feature::SunLongitude => unreachable!(),
+        Feature::SunLongitude | Feature::MoonLongitude | Feature::MoonPhaseAngle => unreachable!(),
     };
+}
+
+#[inline(always)]
+fn sun_longitude(julian_date: f64) -> f64 {
+    (vsop87d::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0)
+}
+
+#[inline(always)]
+fn moon_longitude(julian_date: f64) -> f64 {
+    astro::lunar::geocent_ecl_pos(julian_date).0.long.to_degrees().rem_euclid(360.0)
 }
 
 /// Returns the ecliptic longitude of a feature around a specified observer feature
