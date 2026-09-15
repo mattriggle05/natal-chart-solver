@@ -305,6 +305,18 @@ fn validates_every_search_input() {
 }
 
 #[test]
+fn enforces_search_date_range_without_clipping() {
+    assert_eq!(search_date_range(), vec![SEARCH_START_JD_TT, SEARCH_END_JD_TT]);
+    assert!(validate_search_inputs(SEARCH_START_JD_TT, SEARCH_END_JD_TT, &[10], &[0.0], &[360.0]).is_ok());
+    let before_start = f64::from_bits(SEARCH_START_JD_TT.to_bits() - 1);
+    let after_end = f64::from_bits(SEARCH_END_JD_TT.to_bits() + 1);
+    assert!(validate_search_inputs(before_start, SEARCH_END_JD_TT, &[10], &[0.0], &[360.0]).is_err());
+    assert!(validate_search_inputs(SEARCH_START_JD_TT, after_end, &[10], &[0.0], &[360.0]).is_err());
+    assert!(validate_search_inputs(SEARCH_END_JD_TT, after_end, &[10], &[0.0], &[360.0]).is_err());
+    assert!(validate_search_inputs(SEARCH_END_JD_TT - 1.0, SEARCH_END_JD_TT, &[10], &[0.0], &[30.0]).is_ok());
+}
+
+#[test]
 fn refines_prograde_and_retrograde_zero_crossings() {
     let mut previous_date = 2_451_544.5; // 2000-01-01
     let mut previous_longitude = feature_angle(previous_date, 0); // Mercury

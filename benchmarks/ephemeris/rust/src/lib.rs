@@ -37,5 +37,5 @@ pub fn sample(dates: &[f64], body: u8) -> Vec<f64> { dates.iter().map(|&jd| angl
 #[cfg(feature = "baseline")]
 #[wasm_bindgen]
 pub fn representative_search() -> Vec<f64> {
-    natal_chart_solver::search(2415021.0, 2488070.0, &[10,11], &[150.0,0.0], &[30.0,30.0]).unwrap()
+    natal_chart_solver::search(2415021.0, 2488069.5, &[10,11], &[150.0,0.0], &[30.0,30.0]).unwrap()
 }

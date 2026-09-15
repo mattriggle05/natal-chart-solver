@@ -4,6 +4,16 @@ use vsop87::*;
 const VELOCITY_TOLERANCE: f64 = 6e-12;
 const ONE_MINUTE: f64 = 1.0 / 1440.0;
 
+/// Initial search domain: 1900-01-01 through 2100-01-01, in JD(TT).
+pub const SEARCH_START_JD_TT: f64 = 2_415_020.5;
+pub const SEARCH_END_JD_TT: f64 = 2_488_069.5;
+
+/// Returns the permitted search endpoints in JD(TT); the upper endpoint is exclusive.
+#[wasm_bindgen]
+pub fn search_date_range() -> Vec<f64> {
+    vec![SEARCH_START_JD_TT, SEARCH_END_JD_TT]
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum Feature {
@@ -53,6 +63,9 @@ fn validate_search_inputs(start_julian_date: f64, end_julian_date: f64, feature_
     }
     if start_julian_date >= end_julian_date {
         return Err("search start date must be earlier than end date");
+    }
+    if start_julian_date < SEARCH_START_JD_TT || end_julian_date > SEARCH_END_JD_TT {
+        return Err("search dates must be within 1900-01-01 and 2100-01-01 TT");
     }
     if feature_ids.is_empty() || angle_starts.is_empty() || angle_spans.is_empty() {
         return Err("search requires at least one angular constraint");
