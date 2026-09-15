@@ -4,7 +4,7 @@ static int search_length;
 static double difference(double a, double b) { return normalize(a-b+180)-180; }
 EMSCRIPTEN_KEEPALIVE int representative_search(void) {
     int length=2, source=0;
-    search_windows[0][0]=2415021;search_windows[0][1]=2488070;
+    search_windows[0][0]=2415021;search_windows[0][1]=2488069.5;
     for(int stage=0;stage<2;++stage) {
         int body=stage==0?10:11, count=0;
         double start=stage==0?150:0, step=stage==0?28:10;

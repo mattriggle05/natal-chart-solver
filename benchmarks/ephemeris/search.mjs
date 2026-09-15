@@ -3,7 +3,7 @@
 const norm = x => (x % 360 + 360) % 360;
 const diff = (a,b) => norm(a-b+180)-180;
 export function search(angle) {
-    let windows = [[2415021,2488070]];
+    let windows = [[2415021,2488069.5]];
     for (const [body,start,step] of [[10,150,28],[11,0,10]]) {
         const next=[];
         for (const [a,b] of windows) {
