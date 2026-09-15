@@ -1,0 +1,101 @@
+{
+  "baseline": {
+    "assets": [
+      {
+        "path": "generated/baseline/ephemeris_lab.js",
+        "raw": 12356,
+        "gzip": 3310,
+        "brotli": 2916,
+        "sha256": "86e2c9b26e80b77a055b4e0e70f4cef6a279d92026b3584ac97f3470cf8eb22d"
+      },
+      {
+        "path": "generated/baseline/ephemeris_lab_bg.wasm",
+        "raw": 1552860,
+        "gzip": 1100520,
+        "brotli": 752134,
+        "sha256": "ed92bdf9019fec03990f803e25d17e24675cfef456150cb863e6d2c228e85eb9"
+      }
+    ],
+    "totals": {
+      "raw": 1565216,
+      "gzip": 1103830,
+      "brotli": 755050
+    }
+  },
+  "astro": {
+    "assets": [
+      {
+        "path": "generated/astro/ephemeris_lab.js",
+        "raw": 4973,
+        "gzip": 1489,
+        "brotli": 1338,
+        "sha256": "bbbb26a2bb4f2d7b5f35b409633f36319a815f037bb333c3775c1f30e1322738"
+      },
+      {
+        "path": "generated/astro/ephemeris_lab_bg.wasm",
+        "raw": 1611078,
+        "gzip": 860954,
+        "brotli": 532365,
+        "sha256": "c81afdb1ecafba53874b51cf182b966b0bde37d0662b11ff975743772357fd7f"
+      }
+    ],
+    "totals": {
+      "raw": 1616051,
+      "gzip": 862443,
+      "brotli": 533703
+    }
+  },
+  "javascript": {
+    "assets": [
+      {
+        "path": "search.mjs",
+        "raw": 1547,
+        "gzip": 735,
+        "brotli": 656,
+        "sha256": "cd415834f5dd3db9a0651c51af1a85673e9437a934e39dcefd4471a61a11aa7f"
+      },
+      {
+        "path": "astronomy-adapter.mjs",
+        "raw": 1004,
+        "gzip": 569,
+        "brotli": 534,
+        "sha256": "2aba71b5e62b3054af05983c50595b65fb661336c6ba4924ac5b4dff9e19c01b"
+      },
+      {
+        "path": "generated/astronomy.js",
+        "raw": 412179,
+        "gzip": 107636,
+        "brotli": 85085,
+        "sha256": "0276ebbcfc3746cad98417e3082ba510067ae81a92c1f6ad0f43fae8d417fdc7"
+      }
+    ],
+    "totals": {
+      "raw": 414730,
+      "gzip": 108940,
+      "brotli": 86275
+    }
+  },
+  "c": {
+    "assets": [
+      {
+        "path": "generated/astronomy-c.mjs",
+        "raw": 5968,
+        "gzip": 2018,
+        "brotli": 1786,
+        "sha256": "af10515dd010c76a03de1266119fa1b946c5b4944c9e57e650d37c9b99e1da5e"
+      },
+      {
+        "path": "generated/astronomy-c.wasm",
+        "raw": 56924,
+        "gzip": 33275,
+        "brotli": 30671,
+        "sha256": "00a7502a58fc66053ebb4360c94ebb637e2c6bfff32b04c83e49417dfddfd186"
+      }
+    ],
+    "totals": {
+      "raw": 62892,
+      "gzip": 35293,
+      "brotli": 32457
+    }
+  }
+}

@@ -11,7 +11,7 @@ The project is intentionally backend-first. The search engine, supported astrono
 - Repository: `https://github.com/mattriggle05/natal-chart-solver.git`
 - Branch: `main`
 - Remote: `origin/main`
-- The handoff was prepared from a clean tree synchronized with `origin/main`.
+- The original handoff was prepared from a clean tree synchronized with `origin/main`; check Git status and history for subsequent local commits.
 - Read `docs/natal_chart_solver_design_doc.md` for architecture and numerical details.
 - Read `docs/TODO.md` for the completion checklist.
 - Use `git log --oneline` to recover the sequence and wording of completed work.
@@ -72,7 +72,7 @@ Planetary and solar positions currently use the `vsop87` crate. Lunar longitude 
 
 ## Performance investigation
 
-Ephemeris evaluation is the dominant cost. Recent isolated experiments were deliberately kept outside the repository and are not production code.
+Ephemeris evaluation is the dominant cost. The earlier native experiments were kept outside the repository. The browser laboratory is retained under `benchmarks/ephemeris` and is not production code.
 
 ### Current VSOP87 versus Astronomy Engine
 
@@ -95,7 +95,25 @@ This is the lowest-complexity alternative because `astro` is already a dependenc
 - Swiss Ephemeris WASM: established and accurate, but requires an AGPL-compatible application or a purchased professional license.
 - XALEN: feature-rich, pure Rust, and WASM-compatible, but too new to treat as mature without independent validation.
 
+## Browser benchmark completed
+
+The isolated laboratory is now in `benchmarks/ephemeris`. Read its `README.md` for reproduction and `RESULTS.md` for the measurements and current decision. Raw browser trials, accuracy checks, search windows, and compressed asset sizes are recorded in its `results/` directory.
+
+Astronomy Engine C/WASM was the fastest overall benchmark candidate: approximately 56 times baseline mixed throughput and 1.5 times Astronomy Engine JavaScript in the calibrated run. The representative 200-year Sun/Moon query took 197.6 ms with production, 35.8 ms with JavaScript, and 12.6 ms with C/WASM. All returned 244 windows; both finalists agreed exactly with each other and differed from baseline by at most 0.88 minutes. These are measurements on one browser, not general latency guarantees.
+
+Maximum sampled Astronomy Engine disagreement was 0.00565406 degrees over 1,001 dates spanning 1900–2100. Existing Sun, Moon, and phase JPL fixtures passed. Planetary truth fixtures near stations remain incomplete. The one-arcminute model target does not establish one-minute date accuracy near a station.
+
+Production search code and frontend code remain unchanged by the benchmark work. On 2026-09-15, Matt decided to keep development, correctness testing, and the first working product in Rust because it is easier to understand and iterate. A C/WASM worker or translation to C is deferred as a future optimization, not the next task.
+
+Rust 1.94.0 and wasm-pack 0.14.0 were installed on this laptop. A default macOS SDK/linker mismatch was resolved by setting `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk` for builds. Emscripten 4.0.15 and Astronomy Engine source used for this run are temporary checkouts at `/tmp/natal-emsdk` and `/tmp/natal-astronomy`; reproduce them from the lab documentation if absent. Node 24 is available through the bundled runtime or activated Emscripten SDK.
+
 ## Exact next task
+
+Continue correctness work on the existing Rust backend. Define the longitude and returned-window accuracy targets, TT/UTC handling, and supported date range, then add representative planetary JPL fixtures near angular boundaries and retrograde stations. Verify complete date windows as well as individual longitudes; numerical one-minute refinement is not a guarantee of one-minute astronomical accuracy.
+
+Keep the current Rust implementation and ephemeris dependencies while completing testing and building a working product. Do not start C integration or translation now. Revisit the retained benchmark only as a future optimization after the Rust product works. Present future implementations and proposed short commit messages for approval before committing unless explicitly authorized in advance.
+
+## Original benchmark requirements
 
 Build an isolated browser benchmark laboratory before replacing the production ephemeris engine. Do not integrate a candidate into the search engine first.
 
@@ -123,7 +141,7 @@ The result should determine whether to keep `vsop87`, switch all positions to `a
 
 ## Remaining high-priority backend work
 
-- Select and document the production ephemeris engine and its accuracy contract.
+- Retain the Rust backend and document its ephemeris accuracy contract.
 - Define UTC/UT/TT/JDE handling and the supported date range.
 - Finish representative per-body JPL verification near angular boundaries and stations.
 - Add Pluto and decide whether nodes, Chiron, Lilith, or other chart points are release requirements.
@@ -191,6 +209,7 @@ The following checks passed on 2026-09-13 before this document was committed:
 
 - Keep responses and changes professional and direct.
 - Backend correctness and performance come before frontend work.
+- Finish correctness testing and a working product in Rust first; defer a C/WASM worker or C translation as a future optimization.
 - Prefer small helper functions and minimal architectural splits.
 - Keep function arguments on one line, even when the line is long.
 - Keep the search implementation in `crate/src/lib.rs` and its tests in `crate/src/tests.rs` unless there is a concrete reason to restructure further.
@@ -208,5 +227,5 @@ The following checks passed on 2026-09-13 before this document was committed:
 5. Start a new task using the prompt below and include the shared-task link.
 
 ```text
-Read docs/HANDOFF.md, docs/natal_chart_solver_design_doc.md, and docs/TODO.md completely. Inspect the current source and recent Git history. Continue from the exact next task in HANDOFF.md. The previous task is available at: <shared task URL>. Do not modify production search code until the isolated browser ephemeris benchmark establishes which engine should be used. Follow the working preferences recorded in HANDOFF.md.
+Read docs/HANDOFF.md, docs/natal_chart_solver_design_doc.md, and docs/TODO.md completely. Inspect the current source and recent Git history. Continue from the exact next task in HANDOFF.md. The previous task is available at: <shared task URL>. Keep the backend in Rust and continue correctness work toward a working product. C/WASM is deferred as a future optimization. Follow the working preferences recorded in HANDOFF.md.
 ```

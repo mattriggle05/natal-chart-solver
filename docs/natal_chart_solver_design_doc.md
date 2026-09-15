@@ -105,6 +105,8 @@ during development (~3-8 second rebuilds vs 30+ for release).
 
 ## Astronomical Model
 
+The production backend remains Rust with the existing VSOP87 and astro models. Complete correctness testing and a working product in Rust first; a C/WASM worker or C translation is deferred as a future optimization. The isolated measurements remain in `../benchmarks/ephemeris/RESULTS.md`. Planetary boundary/station verification and a formal time/accuracy contract are the next backend priorities.
+
 ### Coordinate System
 All search calculations use **geocentric ecliptic longitude** — the geometric position of a
 planet as seen from Earth, measured in degrees along the ecliptic plane (0-360°).

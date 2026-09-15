@@ -43,6 +43,8 @@ This checklist defines the work required for Natal Chart Solver to be considered
 
 ### Search performance and execution
 
+- [x] Build and run the isolated four-engine browser ephemeris laboratory with throughput, initialization, asset-size, accuracy, and finalist-search records.
+- [ ] Deferred until the Rust product works: evaluate a C/WASM worker or C translation using the retained benchmarks and equivalent correctness tests.
 - [x] Replace the fixed one-day coarse step with verified per-body safe step sizes.
 - [x] Add repeatable release profiling for initialization, validation, VSOP evaluation, per-feature filtering, and complete searches.
 - [x] Benchmark Moon longitude and Moon phase searches and verify their production WASM size impact.
