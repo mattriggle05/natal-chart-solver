@@ -19,3 +19,11 @@ From 1972 onward, civil conversion uses TT = UTC + (TAI−UTC) + 32.184 seconds 
 JavaScript timestamps cannot represent `23:59:60`. Inverse conversion flags a leap-second instant and maps its display timestamp to the following midnight; the original TT result remains unchanged. Search bounds apply after conversion: a civil midnight is not generally a TT midnight, so full-domain controls should use the exported TT bounds directly.
 
 Run `npm run test:time` with Node 24 to verify conversion anchors, calendar validation, historical and future labeling, and a leap-second transition. Conversion round trips verify implementation consistency, not astronomical accuracy.
+
+## Numerical and display precision
+
+Angular crossings and station brackets refine to one second, retaining full floating-point JD(TT) endpoints. Bisection returns the bracket midpoint, giving at most half a second of bracketing error for a correctly bracketed root of the implemented model. This is not a bound on ephemeris error or station-detection error.
+
+Display rounds each civil endpoint to its nearest minute. Rounding can add up to 30 seconds of error; it must never affect interval intersection, merging, or subsequent searches. Positive windows shorter than one minute remain in results and receive a `less than one minute` label, including when both displayed endpoints round to the same minute.
+
+A strict 60-second astronomical boundary target would leave at most 29.5 seconds for ephemeris and time-conversion error after numerical refinement and display rounding. That target has not been certified. Slow motion near stations can turn very small longitude errors into large time errors; no universal time guarantee follows from a longitude tolerance alone.

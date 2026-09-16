@@ -73,3 +73,16 @@ export function jdTtToCivil(jdTt: JulianDateTt): CivilTime {
     for (let i = 0; i < 5; ++i) unixMs = (jdTt - UNIX_JD) * DAY_MS - historicalDeltaT(Math.min(unixMs, Date.UTC(1972, 0, 1) - 1)) * 1000;
     return { unixMs, scale: 'UT estimate', leapSecond: false };
 }
+
+/** Display precision only: never feed rounded values back into search or interval merging. */
+export function formatJdTtMinute(jdTt: JulianDateTt): string {
+    const civil = jdTtToCivil(jdTt);
+    const rounded = Math.round(civil.unixMs / 60_000) * 60_000;
+    return `${new Date(rounded).toISOString().slice(0, 16).replace('T', ' ')} ${civil.scale}`;
+}
+
+export function formatWindowMinutes(start: JulianDateTt, end: JulianDateTt): string {
+    if (!(start < end)) throw new RangeError('Window must have positive duration');
+    const label = `${formatJdTtMinute(start)} – ${formatJdTtMinute(end)}`;
+    return label + ((end - start) * 86400 < 60 ? ' (less than one minute)' : '');
+}
