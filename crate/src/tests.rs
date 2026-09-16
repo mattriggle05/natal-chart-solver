@@ -665,3 +665,16 @@ fn randomized_search_matches_direct_evaluation() {
         eprintln!("feature={}({feature_id}), included_cases={}, mean_days={:.6}, median_days={:.6}, same_count_width_ratio={same_count_width_ratio:.6}", feature_name(feature_id), widths_when_included.len(), mean(&widths_when_included), median(&widths_when_included));
     }
 }
+
+#[test]
+fn preserves_subminute_windows_with_second_level_refinement() {
+    let date = 2451545.0;
+    let feature = Feature::SunLongitude;
+    let start = angle_at(date, feature);
+    let end = angle_at(date + 20.0 / 86400.0, feature);
+    let windows = search_refined_windows(date - 1.0, date + 1.0, &[feature as u8], &[start], &[angular_difference(end, start)]);
+    assert_eq!(windows.len(), 2);
+    assert!((windows[0] - date).abs() * 86400.0 < 0.5);
+    assert!((windows[1] - date).abs() * 86400.0 > 19.5);
+    assert!((windows[1] - date).abs() * 86400.0 < 20.5);
+}

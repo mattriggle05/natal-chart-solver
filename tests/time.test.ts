@@ -29,3 +29,13 @@ test('a positive leap second adds one SI second and remains distinguishable', ()
     assert.equal(jdTtToCivil((before + 1.5/86400) as JulianDateTt).leapSecond, true);
     assert.equal(jdTtToCivil(after).leapSecond, false);
 });
+
+test('minute display rounds through midnight without changing stored times', async () => {
+    const { formatJdTtMinute, formatWindowMinutes } = await import('../src/utils/time.ts');
+    const start = civilUnixMsToJdTt(Date.parse('2000-02-29T23:59:40Z'));
+    const end = civilUnixMsToJdTt(Date.parse('2000-02-29T23:59:50Z'));
+    assert.equal(formatJdTtMinute(start), '2000-03-01 00:00 UTC');
+    assert.equal(formatWindowMinutes(start, end), '2000-03-01 00:00 UTC – 2000-03-01 00:00 UTC (less than one minute)');
+    assert(start < end);
+    assert.throws(() => formatWindowMinutes(end, start));
+});

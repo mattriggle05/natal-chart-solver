@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::*;
 use vsop87::*;
 
 const VELOCITY_TOLERANCE: f64 = 6e-12;
-const ONE_MINUTE: f64 = 1.0 / 1440.0;
+const ROOT_TIME_TOLERANCE: f64 = 1.0 / 86400.0; // One-second bracket; at most half a second to its midpoint.
 
 /// Initial search domain: 1900-01-01 through 2100-01-01, in JD(TT).
 pub const SEARCH_START_JD_TT: f64 = 2_415_020.5;
@@ -303,7 +303,7 @@ pub fn bisection_derivative_find_zero(start_julian_date: f64, end_julian_date: f
         let midpoint_velocity: f64 = instantaneous_velocity(midpoint, feature);
 
         // we are explicitly search for zero velocity, so just compare directly
-        if midpoint_velocity == 0.0 || (right - left) < ONE_MINUTE{
+        if midpoint_velocity == 0.0 || (right - left) < ROOT_TIME_TOLERANCE{
             return midpoint
         } else if f64_same_sign(reference_velocity, midpoint_velocity) {
             left = midpoint;   // zero is in right half, advance left
@@ -343,7 +343,7 @@ fn bisection_value_find_with_angles(start_julian_date: f64, end_julian_date: f64
         let midpoint_angle: f64 = angle_at(midpoint, feature);
         let midpoint_error = angular_difference(midpoint_angle, target_value);
 
-        if midpoint_error == 0.0 || (right - left) < ONE_MINUTE {
+        if midpoint_error == 0.0 || (right - left) < ROOT_TIME_TOLERANCE {
             return midpoint;
         } else if f64_same_sign(left_error, midpoint_error) {
             left = midpoint;

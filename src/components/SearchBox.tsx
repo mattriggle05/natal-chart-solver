@@ -1,18 +1,13 @@
-import { civilDateToJdTt, jdTtToCivil } from '../utils/time';
+import { civilDateToJdTt, formatWindowMinutes } from '../utils/time';
 import type { JulianDateTt } from '../utils/time';
 import { useDataSearch } from '../hooks/useDateSearch';
 import { Feature } from '../types/features';
 import styles from './SearchBox.module.css';
 
-function jdToDate(jd: number): string {
-    const civil = jdTtToCivil(jd as JulianDateTt);
-    return `${new Date(civil.unixMs).toISOString().slice(0, 10)} ${civil.scale}`;
-}
-
 function formatResults(raw: Float64Array): string {
     const windows: string[] = [];
     for (let i = 0; i + 1 < raw.length; i += 2) {
-        windows.push(`${jdToDate(raw[i])} - ${jdToDate(raw[i + 1])}`);
+        windows.push(formatWindowMinutes(raw[i] as JulianDateTt, raw[i + 1] as JulianDateTt));
     }
     return windows.join(', ');
 }
