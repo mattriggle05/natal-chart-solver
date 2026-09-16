@@ -190,12 +190,8 @@ Using a start and span instead of start and end removes ambiguity for arcs that 
 0°/360°. Angle membership is `(angle - start_degrees).rem_euclid(360) < span_degrees`.
 
 ### Julian Date Conversion
-TypeScript:
-```typescript
-const jd = date.getTime() / 86400000.0 + 2440587.5;
-```
-The library uses JDE (Terrestrial Time) internally. The difference between UTC and TT
-is currently ~69 seconds — negligible for our use case (windows measured in days).
+
+All ephemeris and search values are JD(TT). The shared `src/utils/time.ts` converts explicit Gregorian civil dates and browser timestamps to TT, and converts results back with historical/provisional time labels. See [backend_contract.md](backend_contract.md) for the leap-second and pre-1972 policy. The roughly 69-second modern UTC/TT difference must not be ignored for minute-level results.
 
 ---
 
@@ -367,8 +363,8 @@ Exposes `{ search, results }` to components.
 `search(params)` posts a message to the worker with:
 ```typescript
 interface SearchParams {
-    startJd: number;
-    endJd: number;
+    startJdTt: JulianDateTt;
+    endJdTt: JulianDateTt;
     featureIds: Feature[];
     angleStarts: number[];
     angleSpans: number[];
@@ -395,9 +391,9 @@ Currently hardcoded test search (Sun in Virgo, 2005-2006). Houses the
 Visual solar system display. Uses `system_model_at_date` for heliocentric positions.
 Accepts a `date: Date` prop and re-runs on date change.
 
-### Date Utilities (`src/utils/date.ts` — partially implemented)
-`jdToDate(jd: number): string` — Julian Date to MM/DD/YYYY (Meeus Ch.7 algorithm).
-Gregorian-to-JD conversion exists in discussion but may not be in utils yet.
+### Date Utilities (`src/utils/time.ts`)
+
+Strict Gregorian date parsing, civil-to-TT conversion, and labeled TT-to-civil conversion are shared and tested with `npm run test:time`.
 
 ---
 

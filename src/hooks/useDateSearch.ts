@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { JulianDateTt } from '../utils/time';
 import { Feature } from '../types/features';
 
 export interface SearchParams {
-    startJd: number;
-    endJd: number;
+    startJdTt: JulianDateTt;
+    endJdTt: JulianDateTt;
     featureIds: Feature[];
     angleStarts: number[];
     angleSpans: number[];
@@ -11,7 +12,7 @@ export interface SearchParams {
 
 export function useDataSearch() {
     const workerRef = useRef<Worker | null>(null);
-    const [results, setResults] = useState<Float64Array>(new Float64Array([-1]));
+    const [results, setResults] = useState<Float64Array>(new Float64Array());
 
     useEffect(() => {
         workerRef.current = new Worker(

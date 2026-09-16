@@ -9,13 +9,13 @@ self.onmessage = async (e) => {
         if (e.data.type === 'search') {
             console.log('worker searching')
 
-            const { startJd, endJd, featureIds, angleStarts, angleSpans } = e.data.params;
+            const { startJdTt, endJdTt, featureIds, angleStarts, angleSpans } = e.data.params;
 
-            console.log({ startJd, endJd, featureIds, angleStarts, angleSpans })
+            console.log({ startJdTt, endJdTt, featureIds, angleStarts, angleSpans })
 
             let result = search(
-                startJd,
-                endJd,
+                startJdTt,
+                endJdTt,
                 new Uint8Array(featureIds),
                 new Float64Array(angleStarts),
                 new Float64Array(angleSpans),

@@ -1,3 +1,4 @@
+import { civilUnixMsToJdTt } from '../utils/time';
 import { useState, useEffect } from 'react';
 import init, { system_model_at_date } from '@wasm/natal_chart_solver';
 import styles from './SolarSystem.module.css';
@@ -9,7 +10,7 @@ function SolarSystem({ date }: { date: Date }) {
     useEffect(() => {
         init()
             .then(() => {
-                const jde = date.getTime() / 86400000.0 + 2440587.5;
+                const jde = civilUnixMsToJdTt(date.getTime());
                 const result = system_model_at_date(jde);
                 setPlanetPositions(result);
             })
