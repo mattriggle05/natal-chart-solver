@@ -1,228 +1,97 @@
-# Natal Chart Solver — Completion Checklist
+# Natal Chart Solver — First Version Plan
 
-This checklist defines the work required for Natal Chart Solver to be considered complete. Items are divided into computation/backend work and frontend/product work. A release is complete when every applicable checkbox is checked and the final acceptance criteria pass.
+Updated 2026-09-29. This plan defines a bounded path to a usable first version. Deferred work is not a prerequisite for starting the UI or completing this milestone. The original broad completion inventory remains in Git history.
 
-## Backend / Computation
+## Scope and decisions
 
-### Search correctness
+- Keep the backend in Rust with the existing VSOP87 and astro dependencies. Ephemeris replacement and C/WASM migration are deferred.
+- Search apparent geocentric tropical longitudes, true equinox of date. The apparent-position implementation is currently uncommitted and still needs review.
+- Search within `[1900-01-01 00:00 TT, 2100-01-01 00:00 TT)`. Users select a subrange; the exported backend bounds are authoritative.
+- Build the initial form around signs for the currently supported bodies: Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, and Neptune. Moon phase remains supported by the backend; a phase input is optional later.
+- Display times to the nearest minute while retaining full internal precision and subminute windows.
+- Minute display resolution is implemented. A universal one-minute astronomical accuracy guarantee is not established. The known Neptune discrepancy remains a limitation, not an accepted maximum error or permission to weaken tests silently.
+- Keep search implementation in `crate/src/lib.rs` and tests in `crate/src/tests.rs`. Do not restructure them merely to satisfy a checklist.
+- Do not update HANDOFF.md as part of routine work.
 
-- [ ] Define and document exact search interval semantics, including whether start and end boundaries are inclusive or exclusive.
-- [x] Validate that `start_julian_date` is finite and earlier than `end_julian_date`.
-- [x] Validate that feature, angle-start, and angle-span arrays have equal, nonzero lengths.
-- [x] Validate every feature ID, angle start, and angle span before starting a search.
-- [x] Return structured errors to TypeScript instead of `NaN`, panics, or silently empty results.
-- [x] Correctly preserve a matching window that begins at the start of the requested search range.
-- [x] Correctly append a matching window that remains open at the end of the requested search range.
-- [x] Handle exact angular-boundary timestamps consistently.
-- [x] Normalize angular differences across the 0°/360° boundary.
-- [x] Correctly detect Pisces-to-Aries and Aries-to-Pisces transitions in both prograde and retrograde motion.
-- [x] Replace average-displacement station detection with instantaneous angular velocity.
-- [x] Ensure station bracketing works when a station lies exactly on a coarse-sample timestamp.
-- [x] Split search ranges into provably monotonic intervals around retrograde stations.
-- [x] Make angular boundary refinement work for both increasing and decreasing motion.
-- [x] Detect both boundaries of a narrow or wrapped angular arc within one coarse step.
-- [x] Verify that multiple angular-range entries during one retrograde cycle produce separate, ordered windows.
-- [x] Merge adjacent or numerically overlapping result windows where appropriate.
-- [x] Guarantee sorted, nonoverlapping results for every valid search.
-- [ ] Decide how UTC, UT, TT, and JDE differences are handled and document the supported time accuracy.
-- [ ] Define the supported historical and future date range based on VSOP87 accuracy.
+## Completed foundation
 
-### Astronomical coverage and accuracy
+These items describe implemented behavior and existing tests, not exhaustive proofs of accuracy.
 
-- [ ] Establish an accuracy target for longitudes, sign boundaries, and returned date windows.
-- [ ] Validate geocentric longitude calculations against JPL Horizons or another authoritative ephemeris across representative dates.
-- [ ] Verify all supported planets near sign boundaries and retrograde stations.
-- [x] Resolve the apparent `vsop87d` solar-system-display offset as an expected coordinate-frame difference.
-- [x] Implement Moon longitude with a documented astronomical model and accuracy range.
-- [x] Implement Moon phase angle as a searchable angular constraint.
-- [ ] Implement Pluto longitude with a documented astronomical model and accuracy range.
-- [ ] Decide whether Chiron, the North Node, Lilith, and other chart points are release requirements.
-- [ ] Implement every additional release-required chart point and document whether it is true, mean, or otherwise derived.
-- [ ] Keep the Rust feature-ID definitions and TypeScript `Feature` enum synchronized from one authoritative source.
-- [ ] Remove unsupported feature identifiers from the production UI until their computation is implemented.
+- [x] Validated public search API; reject malformed arrays, unsupported feature IDs, invalid angles, and nonfinite or reversed dates.
+- [x] Half-open angular constraints and returned time windows; preserve and clip matching range endpoints.
+- [x] Wraparound, prograde and retrograde boundary refinement, station splitting, and deterministic window merging.
+- [x] Sun-first filtering, per-feature coarse steps, and endpoint reuse.
+- [x] Moon longitude and derived Moon phase search.
+- [x] Range validation and exported JD(TT) bounds (`5953f84`).
+- [x] Explicit TT conversion through UI and worker, strict calendar parsing, historical/provisional civil-time labels (`2812a3f`).
+- [x] One-second numerical refinement, minute display, and preservation of subminute windows (`614fd1f`).
+- [x] TypeScript tests for conversion, leap seconds, calendar validation, and minute formatting.
+- [x] Existing Rust boundary, validation, retrograde, randomized, and direct-evaluation regression tests.
+- [x] Isolated browser ephemeris benchmarks retained for future decisions.
 
-### Search performance and execution
+## Before UI work — execute in this order
 
-- [x] Build and run the isolated four-engine browser ephemeris laboratory with throughput, initialization, asset-size, accuracy, and finalist-search records.
-- [ ] Deferred until the Rust product works: evaluate a C/WASM worker or C translation using the retained benchmarks and equivalent correctness tests.
-- [x] Replace the fixed one-day coarse step with verified per-body safe step sizes.
-- [x] Add repeatable release profiling for initialization, validation, VSOP evaluation, per-feature filtering, and complete searches.
-- [x] Benchmark Moon longitude and Moon phase searches and verify their production WASM size impact.
-- [x] Reuse endpoint velocities between adjacent coarse segments.
-- [x] Skip station and velocity calculations for the monotonic Sun.
-- [x] Increase the monotonic Sun step without permitting a skipped sign.
-- [x] Reuse known segment longitudes during boundary refinement.
-- [ ] Automatically order filters by expected selectivity and computation cost.
-- [x] Use the Sun as the first filter when it is included and verify that reordering cannot change results.
-- [x] Remove per-step Rust console logging from production builds.
-- [ ] Benchmark single-body and multi-body searches over representative 1-, 10-, 100-, and 1,000-year ranges.
-- [ ] Define acceptable search latency and memory limits for supported devices.
-- [ ] Add progressive result delivery or progress reporting for long searches.
-- [ ] Implement search cancellation by terminating and replacing the active worker.
-- [ ] Ignore stale worker responses using search/request identifiers.
-- [ ] Decide whether multi-worker range partitioning is required to meet the performance target.
-- [ ] If required, implement multi-worker search partitioning, result ordering, deduplication, and boundary merging.
-- [ ] Select worker count conservatively using device capabilities and measured performance.
-- [ ] Evaluate Brent's method or another root finder after correctness is established.
-- [ ] Evaluate a precomputed ephemeris cache only if profiling shows VSOP87 evaluation remains a bottleneck.
+1. [ ] **Finish the apparent-position change.** Review light time, aberration, deflection, precession, nutation, and frame handling. Resolve the remaining implementation/frame discrepancy with focused checks. Keep the known VSOP87 model disagreement separate from implementation bugs. Remove experimental production code or finalize it; retain useful diagnostics separately from routine acceptance tests.
+2. [ ] **Make the collected position fixtures into regression tests.** Reuse existing JPL samples across the supported range for every supported body and derived Moon phase. Add explicit, justified angular tolerances and provenance; print-only probes are not accuracy tests. Preserve the Neptune discrepancy as a documented regression case. Do not start an exhaustive century-wide ingress survey.
+3. [ ] **Finish a fixed suite of 8–12 complete reference searches.** Inventory and reuse existing coverage before adding cases. Cover ordinary single-body results, multiple constraints, retrograde re-entry, wrapped and narrow arcs, clipped endpoints, and empty results. Include independently sourced complete windows and representative boundary/station cases. Check missing/extra windows separately from endpoint timing differences. Do not count agreement with the same ephemeris as independent astronomical validation.
+4. [ ] **Document the measured accuracy and remaining limits.** Update the backend contract and affected design sections with the actual coordinate convention, tested scope, observed timing differences, and distinction between numerical precision and model accuracy. Do not promise one-minute astronomical accuracy or generalize one observed error into a global bound. No further engine-selection research in this milestone.
+5. [ ] **Run the final backend acceptance pass and commit the finished changes.** Run the full existing Rust suite, TypeScript time tests, and production WASM/TypeScript/Vite build. Fix failures attributable to the changes. Commit apparent positions, reference tests, and other distinct concerns separately with short messages. Do not include unrelated working-tree changes.
 
-### Rust/WASM API and maintainability
+**Stop condition:** Once these five items pass with no unexplained implementation failures, begin the UI. Known, documented model limitations do not trigger an open-ended ephemeris replacement project. If a concrete failure prevents completion, report that specific failure and its smallest proposed resolution instead of expanding the plan. Add further tests only for changed behavior, a reproduced bug, or an explicitly expanded requirement. This is readiness for a usable prototype, not astronomical certification.
 
-- [x] Replace `search2` with a stable, clearly named public search API.
-- [x] Remove the superseded daily-sampling search implementation.
-- [ ] Break `crate/src/lib.rs` into focused modules for coordinates, bodies, search, roots, dates, and WASM bindings.
-- [ ] Add typed request, result, progress, cancellation, and error contracts across the worker boundary.
-- [ ] Ensure WASM initialization failures are surfaced to the UI.
-- [ ] Add Rust documentation for public functions and non-obvious numerical assumptions.
-- [ ] Add package description, repository, and license metadata to `Cargo.toml`.
-- [ ] Decide whether panic-hook and `js-sys` dependencies are needed, then align `Cargo.toml` with the design documentation.
-- [x] Remove the unused `astronomy-engine` dependency.
-- [ ] Pin and document supported Node, npm, Rust, wasm-pack, and wasm target versions.
-- [ ] Add a version-manager file such as `.nvmrc` so Vite always runs on a supported Node version.
+## Rudimentary UI — next milestone
 
-### Automated verification
+- [ ] Replace the hardcoded query with add/remove body-and-sign rows; prevent duplicate and unsupported bodies.
+- [ ] Add editable start/end dates, sensible defaults, and validation against the backend's TT bounds, including civil-time conversion at the domain edges.
+- [ ] Add accessible labels and field errors; prevent invalid or duplicate submissions.
+- [ ] Add typed worker request/result/error messages and explicit initialization, searching, success, empty, and error states.
+- [ ] Add cancellation by worker termination/replacement and request identifiers to reject stale responses.
+- [ ] Display an ordered result list, count, submitted criteria, minute-level civil times, and subminute-window labels using the existing utilities.
+- [ ] Explain the supported date range, approximate astronomical boundaries, and unavailable bodies without exposing implementation details in the normal input flow.
+- [ ] Make the form and results usable on desktop and mobile with keyboard navigation and readable contrast. Do not require solar-system visualization redesign.
+- [ ] Verify browser success, invalid input, initialization/search failure, empty results, cancellation, and restart without stale output.
+- [ ] Check responsiveness on representative short and full-domain searches. Optimize only if an observed usability problem requires it.
 
-- [x] Add Rust unit tests for angle normalization and half-open angular constraints.
-- [x] Add Rust unit tests for prograde and retrograde root refinement.
-- [x] Add tests for stations, exact boundaries, range endpoints, and 0°/360° wraparound.
-- [x] Add tests for malformed arrays, invalid IDs, invalid angles, reversed ranges, and non-finite values.
-- [x] Add golden-data tests using authoritative ephemeris values.
-- [x] Verify Moon longitude and phase angle against JPL Horizons across the supported centuries.
-- [x] Verify principal Moon phase times against NASA GSFC reference data.
-- [x] Include Moon longitude and Moon phase angle in randomized end-to-end search verification.
-- [x] Add property tests asserting sorted, nonoverlapping windows whose sampled interiors satisfy all requested angular constraints.
-- [x] Compare optimized search results against a small-step brute-force reference implementation.
-- [ ] Add TypeScript tests for Julian-date conversion and result formatting.
-- [ ] Add worker integration tests covering success, error, cancellation, and stale responses.
-- [ ] Add end-to-end tests for representative user searches.
-- [ ] Run the full test suite and production build in continuous integration.
+## Before first public release — not prerequisites for UI development
 
-### Security, build, and release infrastructure
+- [ ] Review the measured model limitations with Matt and settle the public accuracy wording and whether those limitations are acceptable for release.
+- [ ] Verify a known chart search against an independent source; account explicitly for any boundary disagreement.
+- [ ] Document supported features, setup, test/build commands, and known limitations in README; pin the supported toolchain.
+- [ ] Add CI for the existing correctness tests and production build; verify a clean installation/build.
+- [ ] Review dependency security findings and resolve applicable serious issues.
+- [ ] Choose the project license and complete essential package metadata.
+- [ ] Correct deployment URL/base-path issues and missing asset references; verify the actual deployed search in current Chrome, Firefox, Safari, and Edge.
+- [ ] Complete basic responsive/accessibility checks and confirm that normal searches produce no unexpected errors.
 
-- [ ] Review and remediate npm audit findings without breaking the locked build.
-- [ ] Add automated dependency-update and security scanning.
-- [ ] Ensure production source maps and development-server access follow the intended security posture.
-- [ ] Verify reproducible installation with `npm ci` on a clean machine.
-- [ ] Verify reproducible Rust/WASM compilation on a clean machine.
-- [ ] Add CI checks for formatting, TypeScript, Rust, tests, and the production build.
-- [ ] Document the complete local development, test, build, preview, and deployment workflow.
-- [ ] Verify that generated WASM artifacts are always produced during build and do not need to be committed.
-- [ ] Decide whether a service worker and offline asset caching are release requirements.
-- [ ] If required, implement versioned caching for the app shell and WASM binary.
+## Deferred backlog — requires a concrete need or explicit scope expansion
 
-## Frontend / Product
+### Accuracy and supported features
 
-### Product definition and information architecture
+- [ ] Replace VSOP87 with a newer analytical model or locally evaluated ephemeris data, with isolated size/speed/accuracy measurements first.
+- [ ] Survey all sign crossings and near-station errors across 1900–2100; investigate stronger astronomical accuracy guarantees.
+- [ ] Add Pluto.
+- [ ] Decide on nodes, Chiron, Lilith, and other chart points; implement only selected additions.
+- [ ] Add Moon phase controls, exact-degree inputs, or an ecliptic dial.
+- [ ] Add birth-location, houses, ascendant, or other location-dependent refinement.
+- [ ] Expand the supported date range; only then consider pre-Gregorian handling or 1,000-year benchmarks.
 
-- [ ] Finalize the primary use case: reverse-searching dates from complete or partial natal-chart placements.
-- [ ] Define the minimum supported set of celestial bodies for the first complete release.
-- [ ] Decide whether users enter signs only, exact degrees, or both.
-- [ ] Decide whether birth time and birth location refinement are part of the release.
-- [ ] Define how approximate, ambiguous, or multiple date results are explained.
-- [ ] Replace the “Coming soon...” placeholder with a clear product name, purpose, and concise instructions.
-- [ ] Explain the difference between astronomical computation and astrological interpretation.
-- [ ] Publish supported date ranges, accuracy limitations, and unsupported chart features.
+### Performance and architecture
 
-### Search form
+- [ ] Revisit C/WASM or translation to C after the Rust product works.
+- [ ] Order remaining constraints by measured cost/selectivity.
+- [ ] Add determinate progress or streamed results.
+- [ ] Add multi-worker partitioning, conservative worker selection, and tested partition merging if measured latency warrants it.
+- [ ] Evaluate Brent's method if root refinement is a measured bottleneck.
+- [ ] Evaluate an ephemeris cache if position evaluation is a measured bottleneck.
+- [ ] Generate synchronized Rust/TypeScript feature definitions if manual maintenance becomes problematic.
+- [ ] Reconsider module boundaries only for a concrete maintainability problem.
 
-- [ ] Replace the hardcoded `SearchBox` query with editable search controls.
-- [ ] Add start- and end-date inputs with sensible defaults and validation.
-- [ ] Add rows for selecting a celestial body and its zodiac sign.
-- [ ] Allow users to add, remove, and reorder placement rows.
-- [ ] Prevent duplicate celestial-body selections unless there is a defined reason to allow them.
-- [ ] Prevent unsupported bodies from being selected.
-- [ ] Add accessible labels, descriptions, validation messages, and keyboard interaction.
-- [ ] Disable submission until the query is valid.
-- [ ] Provide useful presets or examples for first-time users.
-- [ ] Decide whether an ecliptic dial is valuable; implement it only if it materially improves exact-position input.
-- [ ] Keep search state in the URL so searches can be bookmarked and shared.
-- [ ] Preserve appropriate search preferences locally between sessions.
+### Product and presentation
 
-### Search lifecycle and feedback
-
-- [ ] Show an initialization state while the WASM module loads.
-- [ ] Show an explicit searching state and elapsed time.
-- [ ] Display determinate progress when the computation layer can provide it.
-- [ ] Add a cancel-search control.
-- [ ] Cancel or supersede an active search when parameters change and the user starts again.
-- [ ] Show actionable errors for invalid input, worker failure, WASM failure, and unsupported searches.
-- [ ] Provide a clear empty-results state.
-- [ ] Prevent duplicate submissions and stale results.
-- [ ] Keep the interface responsive throughout the largest supported search.
-
-### Results experience
-
-- [ ] Replace comma-separated result text with a structured result list or table.
-- [ ] Display result windows using unambiguous calendar formatting and timezone conventions.
-- [ ] Preserve fractional Julian dates when time-level precision is relevant.
-- [ ] Show result count and search criteria with the results.
-- [ ] Sort results chronologically and clearly distinguish exact timestamps from ranges.
-- [ ] Allow users to inspect the calculated placements at a result date.
-- [ ] Allow a result to update the solar-system visualization.
-- [ ] Add pagination, virtualization, or incremental rendering for large result sets.
-- [ ] Add copy, download, or export functionality for results if required by target users.
-- [ ] Provide a shareable link that reconstructs the query and selected result.
-
-### Solar-system visualization
-
-- [ ] Decide whether the heliocentric solar-system model is part of the core workflow or a supporting visualization.
-- [ ] Label every planet and orbit clearly.
-- [ ] Add zodiac/ecliptic context if the visualization is meant to explain search results.
-- [ ] Distinguish the heliocentric display from the geocentric zodiac calculations.
-- [ ] Handle invalid dates and WASM calculation errors.
-- [ ] Avoid reinitializing WASM unnecessarily on every date update.
-- [ ] Verify transitions and layout across supported browsers.
-- [ ] Make the visualization usable on small screens without clipping or forced page-level overflow.
-- [ ] Add reduced-motion behavior for users who request it.
-
-### Design, responsiveness, and accessibility
-
-- [ ] Create a cohesive visual design for the search, progress, results, and visualization views.
-- [ ] Replace viewport-dependent fixed sizing where it causes overflow or unusable layouts.
-- [ ] Restore normal page scrolling where content exceeds the viewport.
-- [ ] Support mobile, tablet, laptop, and wide desktop layouts.
-- [ ] Meet WCAG 2.2 AA color-contrast requirements.
-- [ ] Ensure complete keyboard navigation and visible focus states.
-- [ ] Use semantic headings, landmarks, forms, buttons, tables, and status regions.
-- [ ] Announce progress, completion, errors, and result counts to assistive technologies.
-- [ ] Verify zoom to 200% and text reflow without loss of functionality.
-- [ ] Test with reduced motion, high contrast, and common screen readers.
-
-### Dates, formatting, and localization
-
-- [ ] Move date conversion and formatting into tested shared utilities.
-- [ ] Replace the current date-only Julian conversion when time precision is required.
-- [ ] Define behavior for dates before the Gregorian calendar transition.
-- [ ] Use an unambiguous default date format and consider locale-aware presentation.
-- [ ] Clarify whether displayed times are UTC, local time, TT, or another astronomical time scale.
-- [ ] Handle browser parsing consistently instead of relying on ambiguous date strings.
-
-### Application metadata and deployment
-
-- [ ] Correct and standardize the GitHub Pages URL and username spelling across README, package metadata, and documentation.
-- [ ] Replace or remove missing `logo192.png` and `logo512.png` manifest references.
-- [ ] Create final favicon, application icons, title, description, and social preview metadata.
-- [ ] Verify the Vite base path and all asset URLs on GitHub Pages.
-- [ ] Add a user-facing not-found or routing fallback if client-side routes are introduced.
-- [ ] Verify production behavior using `npm run preview` before every release.
-- [ ] Deploy to GitHub Pages through a repeatable CI workflow rather than a workstation-only manual step.
-- [ ] Add basic privacy-respecting error and performance monitoring if operational requirements justify it.
-- [ ] Verify the production application in current Chrome, Firefox, Safari, and Edge.
-
-### Documentation and final acceptance
-
-- [ ] Rewrite the README with product status, screenshots, supported features, setup, testing, architecture, and deployment instructions.
-- [ ] Update the design document so filenames, dependencies, implemented behavior, and performance claims match reality.
-- [ ] Separate implemented features from proposed future work in all documentation.
-- [ ] Document astronomical data sources, algorithms, accuracy, and limitations.
-- [ ] Document known limitations that remain intentionally accepted for release.
-- [ ] Add contributor guidance and coding/testing conventions.
-- [ ] Add an appropriate license.
-- [ ] Complete a clean-machine installation and build using only repository documentation.
-- [ ] Complete an end-to-end acceptance test for a known natal chart with independently verified expected date windows.
-- [ ] Confirm all automated tests pass in CI.
-- [ ] Confirm the production build has no unexpected console errors or warnings.
-- [ ] Confirm there are no unresolved high-severity security findings applicable to production.
-- [ ] Confirm the deployed application is responsive, accessible, and usable without developer assistance.
-- [ ] Confirm every release-required body, input mode, search range, and result behavior is documented and tested.
-- [ ] Mark the application complete only after every applicable item above is checked or explicitly moved to a documented post-release roadmap.
+- [ ] Add presets, row reordering, saved preferences, and shareable query URLs.
+- [ ] Add result export, detailed placement inspection, and result-driven visualization.
+- [ ] Add pagination or virtualization if measured result volume warrants it.
+- [ ] Improve solar-system labels, coordinate context, layout, animation accessibility, and initialization behavior if retaining it as a product feature.
+- [ ] Add locale-aware formatting and additional timezone presentation.
+- [ ] Add polished branding, social previews, and application icons.
+- [ ] Add offline/service-worker caching, operational monitoring, and automated dependency updates if needed.
