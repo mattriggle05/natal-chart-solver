@@ -107,63 +107,17 @@ during development (~3-8 second rebuilds vs 30+ for release).
 
 The production backend remains Rust with the existing VSOP87 and astro models. Complete correctness testing and a working product in Rust first; a C/WASM worker or C translation is deferred as a future optimization. The isolated measurements remain in `../benchmarks/ephemeris/RESULTS.md`. Planetary boundary/station verification and a formal time/accuracy contract are the next backend priorities.
 
-### Coordinate System
-All search calculations use **geocentric ecliptic longitude** — the geometric position of a
-planet as seen from Earth, measured in degrees along the ecliptic plane (0-360°).
-This matches the tropical zodiac used in astrology.
+### Coordinate System and Apparent Positions
 
-### Astronomical Models
-The `vsop87` Rust crate provides the planetary and solar models. The `astro` Rust crate
-provides the lunar model. We use:
+Search uses apparent geocentric tropical ecliptic longitude, referred to the analytical true equinox of date. Inputs and results use JD(TT). The implemented conventions and limitations are specified in [backend_contract.md](backend_contract.md).
 
-| Module | Coordinates | Frame | Used For |
-|--------|-------------|-------|----------|
-| `vsop87c` | Heliocentric rectangular | Ecliptic of date | Geocentric calculations (search) |
-| `vsop87d` | Heliocentric spherical | Ecliptic of date | Sun longitude (earth + 180°) and solar system display model |
-| `astro::lunar` | Geocentric spherical | Mean ecliptic and equinox of date | Moon longitude |
+VSOP87E provides barycentric rectangular J2000 positions. A fixed rotation puts those vectors into FK5 before combining them with the astro lunar model, whose mean-of-date offset is precessed into the same frame. Light-time iteration uses reception-time Earth and emission-time target positions. Solar deflection and observer-velocity aberration precede precession to date and analytical IAU1980 nutation.
 
-**Why ecliptic of date (vsop87c/d) over J2000 (vsop87a/b)?**
-The tropical zodiac is defined relative to the vernal equinox of the current date, not
-J2000. Users entering natal chart positions from modern astrology apps expect "ecliptic
-of date" coordinates. Using J2000 would introduce a ~0.37° error by 2026 (growing at
-~50.3 arcseconds/year due to precession). vsop87c was verified against JPL Horizons
-and matches to within 0.001° for geocentric longitude.
+The application does not load measured Earth-orientation corrections. Horizons applies those corrections in the modern era; this convention difference is separated from ephemeris error in a focused JPL/IERS regression test. The known Neptune model discrepancy remains. Numerical refinement and minute display do not imply one-minute astronomical accuracy.
 
-The previously observed ~0.36° difference between `vsop87d` output and J2000
-reference values was the expected precession between coordinate frames, not a crate
-error. Search and display calculations now consistently use ecliptic-of-date coordinates.
+Moon longitude retains `astro::lunar::geocent_ecl_pos`, with its principal ELP-2000/82 terms. Moon phase is `(apparent Moon longitude - apparent Sun longitude) mod 360`. Sun and Moon searches retain dedicated monotonic dispatch; planetary searches retain retrograde handling.
 
-### Geocentric Longitude Calculation
-For planets (VSOP87C provides rectangular heliocentric coordinates):
-```
-dx = planet.x - earth.x
-dy = planet.y - earth.y
-longitude = atan2(dy, dx) converted to degrees, rem_euclid(360)
-```
-
-For the Sun:
-```
-longitude = (vsop87d::earth(jd).longitude().to_degrees() + 180°).rem_euclid(360°)
-```
-
-For the Moon, `astro::lunar::geocent_ecl_pos` uses the principal terms of the Chapront
-ELP-2000/82 lunar theory. Its documented longitude accuracy is 10 arcseconds. Direct
-checks against NASA JPL Horizons DE441 remain within 0.02° at representative dates in
-1900, 2000, and 2100.
-
-Moon phase is represented as the Moon's elongation from the Sun:
-```
-phase_angle = (moon_longitude - sun_longitude).rem_euclid(360°)
-```
-The principal phase angles are 0° new Moon, 90° first quarter, 180° full Moon, and
-270° last quarter. This is a derived angular feature and uses the same generic angular
-constraint interface as body longitude.
-
-The lunar model and both lunar feature search paths are verified over the supported
-1900–2100 range. A daily scan confirms that Moon longitude and phase angle remain
-prograde, while every 10-day coarse segment remains below the 180° unwrapping limit.
-Reference tests cover JPL Horizons longitudes and phase angles at 1900, 2000, and 2100,
-plus all four principal NASA GSFC phase times in a 2024 lunation.
+The heliocentric visualization still uses VSOP87D of-date longitudes. Its difference from J2000 positions is an expected reference-frame difference, not a known 0.36-degree crate error.
 
 ### Planet/Feature ID Scheme
 ```
@@ -260,8 +214,7 @@ The current features are geocentric body longitudes and the derived Moon phase a
 The `Feature` enum prevents an unsupported numeric ID from reaching astronomical
 evaluation after input validation.
 
-Earth (`vsop87c::earth`) is computed once and reused for all planet calculations in a
-single call to avoid redundant VSOP87 evaluations.
+The apparent-position pipeline evaluates reception/emission positions and Earth velocity in one inertial frame. These corrections require additional ephemeris evaluations compared with the original geometric implementation.
 
 ---
 
@@ -309,7 +262,7 @@ using bisection. Caller must guarantee opposite velocity signs at endpoints.
 
 **Termination conditions:**
 - `|velocity| <= 6e-12` degrees/day (proportional to H² — the error floor of `instantaneous_velocity`)
-- Interval width < 1 minute (1/1440 days) — floating point refinement limit
+- Interval width < 1 second (1/86400 days); return the bracket midpoint
 
 **Bisection direction:** Uses `f64_same_sign` against reference velocity at `left` to
 determine which half contains the zero. Correctly handles both prograde→retrograde and
@@ -326,8 +279,8 @@ Finds the Julian date when a feature angle equals `target_value` within a monoto
 interval. Used to refine angular-constraint boundary crossings.
 
 **Termination conditions:**
-- `|longitude - target| < 1/3600°` (1 arcsecond — the accuracy floor of VSOP87C)
-- Interval width < 1 minute
+- Exact numerical equality with the target
+- Interval width < 1 second; return the bracket midpoint
 
 **Target values** are the constraint's start angle and its normalized end angle.
 
@@ -350,7 +303,7 @@ pub fn system_model_at_date(julian_date: f64) -> Vec<f64>
 ```
 Returns heliocentric ecliptic longitudes for all 8 planets (Mercury through Neptune)
 for the solar system display visualization. Uses `vsop87d` (spherical, ecliptic of date).
-Known ~0.36° inaccuracy vs JPL for display purposes only — acceptable.
+Frame comparisons must use the same ecliptic and equinox.
 
 ---
 
@@ -517,8 +470,7 @@ natal chart position rather than selecting a sign from a dropdown.
 
 ## Known Bugs
 
-1. **`system_model_at_date` heliocentric longitudes ~0.36° off JPL** — believed to be
-   a vsop87d crate issue. Display only, acceptable.
+The historical ~0.36° display discrepancy was an of-date versus J2000 frame difference. Current accuracy limitations are recorded in the backend contract.
 
 ---
 

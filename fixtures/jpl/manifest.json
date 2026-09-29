@@ -1,0 +1,155 @@
+[
+  {
+    "file": "199.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'199'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "a2754662a031833f20ae10df529b80766297b0de22d83a83eaab2dc4efb42b25"
+  },
+  {
+    "file": "299.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'299'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "d48b31e4a825c32db53df3d0edd269987da600d53b40a9f866bbe9a20098f601"
+  },
+  {
+    "file": "499.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'499'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "8e6d33942ad981d327f3afc07d7f694d966fc2105b2afc20ce3112090a3ef9a4"
+  },
+  {
+    "file": "599.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'599'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "6f27ce13729e7df8813f5f76af58b95307efdb4b19508ceeb74ce78f1c07d7bf"
+  },
+  {
+    "file": "699.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'699'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "12f0d0c4462194935017097a76d179e93c4739e6bac8ddb1991c905c0fdbf846"
+  },
+  {
+    "file": "799.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'799'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "4fbac610b9df4a9b19772fce4c962c41e8a3e2e03ba9b3940dced4e130ca1306"
+  },
+  {
+    "file": "899.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'899'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "834eeb0f6549cb00997effb37051a11a3d3a400d613d7930e24fd079b64411a6"
+  },
+  {
+    "file": "10.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'10'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "ca512ca17ff00636c7772bd41563d70f5c8e1d5194f9bbfba52d9dd3bd9b44ac"
+  },
+  {
+    "file": "301.json",
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'301'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "sha256": "4cd348d22047355f3844577c10b66f10cfd34ce9a444a610306f21436fc6b375"
+  }
+]

@@ -5,7 +5,7 @@ Updated 2026-09-29. This plan defines a bounded path to a usable first version. 
 ## Scope and decisions
 
 - Keep the backend in Rust with the existing VSOP87 and astro dependencies. Ephemeris replacement and C/WASM migration are deferred.
-- Search apparent geocentric tropical longitudes, true equinox of date. The apparent-position implementation is currently uncommitted and still needs review.
+- Search apparent geocentric tropical longitudes, true equinox of date. The apparent-position implementation has been reviewed and tested; its implementation is complete.
 - Search within `[1900-01-01 00:00 TT, 2100-01-01 00:00 TT)`. Users select a subrange; the exported backend bounds are authoritative.
 - Build the initial form around signs for the currently supported bodies: Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, and Neptune. Moon phase remains supported by the backend; a phase input is optional later.
 - Display times to the nearest minute while retaining full internal precision and subminute windows.
@@ -31,7 +31,7 @@ These items describe implemented behavior and existing tests, not exhaustive pro
 
 ## Before UI work — execute in this order
 
-1. [ ] **Finish the apparent-position change.** Review light time, aberration, deflection, precession, nutation, and frame handling. Resolve the remaining implementation/frame discrepancy with focused checks. Keep the known VSOP87 model disagreement separate from implementation bugs. Remove experimental production code or finalize it; retain useful diagnostics separately from routine acceptance tests.
+1. [x] **Finish the apparent-position change.** Review light time, aberration, deflection, precession, nutation, and frame handling. Resolve the remaining implementation/frame discrepancy with focused checks. Keep the known VSOP87 model disagreement separate from implementation bugs. Remove experimental production code or finalize it; retain useful diagnostics separately from routine acceptance tests. Completed 2026-09-29: common FK5 input frame, EOP residual explained with a focused reference test, manual surveys marked ignored.
 2. [ ] **Make the collected position fixtures into regression tests.** Reuse existing JPL samples across the supported range for every supported body and derived Moon phase. Add explicit, justified angular tolerances and provenance; print-only probes are not accuracy tests. Preserve the Neptune discrepancy as a documented regression case. Do not start an exhaustive century-wide ingress survey.
 3. [ ] **Finish a fixed suite of 8–12 complete reference searches.** Inventory and reuse existing coverage before adding cases. Cover ordinary single-body results, multiple constraints, retrograde re-entry, wrapped and narrow arcs, clipped endpoints, and empty results. Include independently sourced complete windows and representative boundary/station cases. Check missing/extra windows separately from endpoint timing differences. Do not count agreement with the same ephemeris as independent astronomical validation.
 4. [ ] **Document the measured accuracy and remaining limits.** Update the backend contract and affected design sections with the actual coordinate convention, tested scope, observed timing differences, and distinction between numerical precision and model accuracy. Do not promise one-minute astronomical accuracy or generalize one observed error into a global bound. No further engine-selection research in this milestone.

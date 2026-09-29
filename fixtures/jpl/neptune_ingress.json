@@ -1,0 +1,142 @@
+[
+  {
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'899'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2460750.5,2460770.5'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "values": [
+      [
+        2460750.5,
+        359.4515969,
+        -1.2620371
+      ],
+      [
+        2460770.5,
+        0.2047709,
+        -1.2655854
+      ]
+    ],
+    "root_jd_tt": 2460765.0624543596
+  },
+  {
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'899'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2460765.0624427856,2460765.0624659336'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "values": [
+      [
+        2460765.062442789,
+        0.0023488,
+        -1.2641627
+      ],
+      [
+        2460765.062465934,
+        0.0023497,
+        -1.2641627
+      ]
+    ],
+    "root_jd_tt": 2460765.002031591
+  },
+  {
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'899'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2460765.002020017,2460765.002043165'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "values": [
+      [
+        2460765.002020012,
+        8.45e-05,
+        -1.2641488
+      ],
+      [
+        2460765.002043165,
+        8.54e-05,
+        -1.2641488
+      ]
+    ],
+    "root_jd_tt": 2460764.9998466745
+  },
+  {
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'899'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2460764.9998351005,2460764.9998582485'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "values": [
+      [
+        2460764.999835104,
+        2.7e-06,
+        -1.2641483
+      ],
+      [
+        2460764.999858249,
+        3.5e-06,
+        -1.2641483
+      ]
+    ],
+    "root_jd_tt": 2460764.999756976
+  },
+  {
+    "parameters": {
+      "format": "json",
+      "COMMAND": "'899'",
+      "CENTER": "'500@399'",
+      "EPHEM_TYPE": "'OBSERVER'",
+      "TIME_TYPE": "'TT'",
+      "TLIST": "'2460764.999745402,2460764.99976855'",
+      "QUANTITIES": "'31'",
+      "CSV_FORMAT": "'YES'",
+      "EXTRA_PREC": "'YES'",
+      "OBJ_DATA": "'NO'",
+      "CAL_FORMAT": "'JD'"
+    },
+    "values": [
+      [
+        2460764.999745405,
+        359.9999993,
+        -1.2641483
+      ],
+      [
+        2460764.99976855,
+        2e-07,
+        -1.2641483
+      ]
+    ],
+    "root_jd_tt": 2460764.999763406
+  }
+]
