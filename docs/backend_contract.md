@@ -27,3 +27,13 @@ Angular crossings and station brackets refine to one second, retaining full floa
 Display rounds each civil endpoint to its nearest minute. Rounding can add up to 30 seconds of error; it must never affect interval intersection, merging, or subsequent searches. Positive windows shorter than one minute remain in results and receive a `less than one minute` label, including when both displayed endpoints round to the same minute.
 
 A strict 60-second astronomical boundary target would leave at most 29.5 seconds for ephemeris and time-conversion error after numerical refinement and display rounding. That target has not been certified. Slow motion near stations can turn very small longitude errors into large time errors; no universal time guarantee follows from a longitude tolerance alone.
+
+## Apparent coordinates
+
+The Rust pipeline evaluates apparent geocentric tropical ecliptic longitude using VSOP87E barycentric positions and the existing astro lunar series. VSOP vectors are rotated from the dynamical J2000 ecliptic to FK5 before combination; the lunar mean-of-date position is precessed into that same inertial frame. Reception and emission positions therefore share one frame.
+
+Corrections include iterated light travel time, finite-distance solar gravitational deflection (limited inside the solar disk), and relativistic observer-velocity aberration. The result is precessed to date and receives astro's analytical IAU1980 nutation. Moon phase is the difference between the apparent Moon and Sun longitudes. The heliocentric visualization retains its separate VSOP87D display coordinates.
+
+This is an analytical true-equinox-of-date convention, without measured Earth-orientation corrections. Horizons applies observed EOP corrections in the modern era. The retained 2025 Neptune diagnostic isolates that difference: about +0.1095 arcsecond before applying the independently published IERS dPsi adjustment, less than 0.002 arcsecond afterward when using JPL positions. EOP is used only in the test; the application downloads no ephemeris or EOP data. This single correction-pipeline check does not remove VSOP87's planetary model error or certify the full domain.
+
+Ephemeris arguments use TT; the millisecond-scale TT/TDB difference is neglected by these analytical models. The small solar-potential term in relativistic aberration is also omitted. Solar deflection uses the Sun at reception; light paths inside the Sun are regularized rather than physically modeled. These approximations are distinct from the measured Neptune model discrepancy. The correction tests and numerical refinement do not establish one-minute astronomical accuracy.

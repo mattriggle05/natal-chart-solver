@@ -361,36 +361,13 @@ pub fn angular_difference(to: f64, from: f64) -> f64 {
     (to - from + 180.0).rem_euclid(360.0) - 180.0
 }
 
+/// Apparent geocentric tropical longitude at JD(TT), true equinox of date.
 #[inline]
 pub fn angle_at(julian_date: f64, feature: Feature) -> f64 {
-    match feature {
-        Feature::SunLongitude => return sun_longitude(julian_date),
-        Feature::MoonLongitude => return moon_longitude(julian_date),
-        Feature::MoonPhaseAngle => return (moon_longitude(julian_date) - sun_longitude(julian_date)).rem_euclid(360.0),
-        _ => {}
+    if feature == Feature::MoonPhaseAngle {
+        return (apparent_longitude(julian_date, Feature::MoonLongitude) - apparent_longitude(julian_date, Feature::SunLongitude)).rem_euclid(360.0);
     }
-
-    let earth: RectangularCoordinates = vsop87c::earth(julian_date);
-    return match feature {
-        Feature::MercuryLongitude => longitude_from_observer(earth, vsop87c::mercury(julian_date)),
-        Feature::VenusLongitude => longitude_from_observer(earth, vsop87c::venus(julian_date)),
-        Feature::MarsLongitude => longitude_from_observer(earth, vsop87c::mars(julian_date)),
-        Feature::JupiterLongitude => longitude_from_observer(earth, vsop87c::jupiter(julian_date)),
-        Feature::SaturnLongitude => longitude_from_observer(earth, vsop87c::saturn(julian_date)),
-        Feature::UranusLongitude => longitude_from_observer(earth, vsop87c::uranus(julian_date)),
-        Feature::NeptuneLongitude => longitude_from_observer(earth, vsop87c::neptune(julian_date)),
-        Feature::SunLongitude | Feature::MoonLongitude | Feature::MoonPhaseAngle => unreachable!(),
-    };
-}
-
-#[inline(always)]
-fn sun_longitude(julian_date: f64) -> f64 {
-    (vsop87d::earth(julian_date).longitude().to_degrees() + 180.0).rem_euclid(360.0)
-}
-
-#[inline(always)]
-fn moon_longitude(julian_date: f64) -> f64 {
-    astro::lunar::geocent_ecl_pos(julian_date).0.long.to_degrees().rem_euclid(360.0)
+    apparent_longitude(julian_date, feature)
 }
 
 /// Returns the ecliptic longitude of a feature around a specified observer feature
@@ -431,3 +408,101 @@ pub fn system_model_at_date(julian_date: f64) -> Vec<f64> {
 
 #[cfg(test)]
 mod tests;
+
+// Apparent direction in the true equinox of date. All input epochs are TT.
+// VSOP87E supplies barycentric positions, rotated to mean FK5 J2000.
+// All reception/emission positions and the lunar offset use that same frame.
+fn apparent_longitude(jd: f64, feature: Feature) -> f64 {
+    apparent_longitude_with_ephemeris(jd, feature, earth_position, barycentric_position)
+}
+
+// Providers return AU vectors in a common inertial J2000 ecliptic frame.
+// Separate providers allow correction tests against independent vectors without
+// introducing any runtime ephemeris selection or data loading in the application.
+fn apparent_longitude_with_ephemeris(jd: f64, feature: Feature, earth_at: impl Fn(f64) -> [f64; 3], body_at: impl Fn(f64, Feature) -> [f64; 3]) -> f64 {
+    const C_AU_DAY: f64 = 173.144632674240;
+    let earth = earth_at(jd);
+    let mut emitted = jd;
+    let mut target = body_at(emitted, feature);
+    for _ in 0..8 {
+        let next = jd - vector_norm(vector_sub(target, earth)) / C_AU_DAY;
+        if (next - emitted).abs() < 1e-10 { break; }
+        emitted = next;
+        target = body_at(emitted, feature);
+    }
+    let mut direction = vector_unit(vector_sub(target, earth));
+    let sun = body_at(jd, Feature::SunLongitude);
+    let solar_observer = vector_sub(earth, sun);
+    let solar_distance = vector_norm(solar_observer);
+    if feature != Feature::SunLongitude {
+        // Finite-distance solar deflection: Klioner (2003), expression 70.
+        let e = vector_unit(solar_observer);
+        let q = vector_unit(vector_sub(target, sun));
+        // Limit deflection inside the solar disk; a point-mass formula is
+        // singular at exact conjunction and is not an interior-Sun model.
+        let solar_angular_radius = 0.00465047 / solar_distance;
+        let denominator = (1.0 + vector_dot(q, e)).max(0.5 * solar_angular_radius.powi(2));
+        let weight = 1.97412574336e-8 / solar_distance / denominator;
+        let pq = vector_dot(direction, q);
+        let pe = vector_dot(direction, e);
+        for i in 0..3 { direction[i] += weight * (e[i] * pq - q[i] * pe); }
+        direction = vector_unit(direction);
+    }
+    let before = earth_at(jd - 0.01);
+    let after = earth_at(jd + 0.01);
+    let velocity = vector_sub(after, before).map(|v| v / (0.02 * C_AU_DAY));
+    let beta = (1.0 - vector_dot(velocity, velocity)).sqrt();
+    let projection = vector_dot(direction, velocity);
+    direction = vector_unit(std::array::from_fn(|i| beta * direction[i] + (1.0 + projection / (1.0 + beta)) * velocity[i]));
+    let longitude = direction[1].atan2(direction[0]);
+    let latitude = direction[2].asin();
+    let (longitude, _) = astro::precess::precess_ecl_coords(longitude, latitude, 2451545.0, jd);
+    // Analytical IAU1980 nutation, without observed Earth-orientation corrections.
+    // Horizons applies EOP corrections; their absence is a documented model difference.
+    (longitude + astro::nutation::nutation(jd).0).to_degrees().rem_euclid(360.0)
+}
+
+fn vector_sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] { std::array::from_fn(|i| a[i] - b[i]) }
+fn vector_dot(a: [f64; 3], b: [f64; 3]) -> f64 { a[0]*b[0] + a[1]*b[1] + a[2]*b[2] }
+fn vector_norm(a: [f64; 3]) -> f64 { vector_dot(a, a).sqrt() }
+fn vector_unit(a: [f64; 3]) -> [f64; 3] { let norm = vector_norm(a); a.map(|v| v / norm) }
+
+fn barycentric_position(jd: f64, feature: Feature) -> [f64; 3] {
+    if feature == Feature::MoonLongitude {
+        let (moon, distance) = astro::lunar::geocent_ecl_pos(jd);
+        let (longitude, latitude) = astro::precess::precess_ecl_coords(moon.long, moon.lat, jd, 2451545.0);
+        let distance = distance / 149597870.7;
+        let offset = [distance * latitude.cos() * longitude.cos(), distance * latitude.cos() * longitude.sin(), distance * latitude.sin()];
+        let earth = earth_position(jd);
+        return std::array::from_fn(|i| earth[i] + offset[i]);
+    }
+    let position = match feature {
+        Feature::MercuryLongitude => vsop87e::mercury(jd),
+        Feature::VenusLongitude => vsop87e::venus(jd),
+        Feature::MarsLongitude => vsop87e::mars(jd),
+        Feature::JupiterLongitude => vsop87e::jupiter(jd),
+        Feature::SaturnLongitude => vsop87e::saturn(jd),
+        Feature::UranusLongitude => vsop87e::uranus(jd),
+        Feature::NeptuneLongitude => vsop87e::neptune(jd),
+        Feature::SunLongitude => vsop87e::sun(jd),
+        Feature::MoonPhaseAngle => unreachable!("Phase is derived from Moon and Sun longitudes"),
+        Feature::MoonLongitude => unreachable!(),
+    };
+    vsop_to_fk5([position.x, position.y, position.z])
+}
+
+fn earth_position(jd: f64) -> [f64; 3] {
+    let position = vsop87e::earth(jd);
+    vsop_to_fk5([position.x, position.y, position.z])
+}
+
+/// Fixed first-order rotation from VSOP's dynamical J2000 ecliptic to FK5.
+/// Meeus, Astronomical Algorithms, chapter 32: -0.09033", +0.03916".
+/// Applying this at the vector boundary keeps planets, Earth, and the lunar
+/// mean-of-date model in one frame before subtraction, light time, and aberration.
+fn vsop_to_fk5(vector: [f64; 3]) -> [f64; 3] {
+    let a = (0.03916_f64 / 3600.0).to_radians();
+    let b = (0.09033_f64 / 3600.0).to_radians();
+    let [x, y, z] = vector;
+    [x + b*y - a*z, y - b*x + a*z, z + a*x - a*y]
+}

@@ -667,6 +667,35 @@ fn randomized_search_matches_direct_evaluation() {
 }
 
 #[test]
+#[ignore = "manual position survey; acceptance fixtures are task 2"]
+fn probe_apparent_positions() {
+    let mut maximum = [0.0_f64; 17];
+    for line in include_str!("../../fixtures/jpl/positions.csv").lines().skip(1) {
+        let values: Vec<&str> = line.split(',').collect();
+        let id: u8 = values[0].parse().unwrap();
+        let jd: f64 = values[1].parse().unwrap();
+        let expected: f64 = values[2].parse().unwrap();
+        let actual = apparent_longitude(jd, Feature::try_from(id).unwrap());
+        let error = angular_difference(actual, expected) * 3600.0;
+        maximum[id as usize] = maximum[id as usize].max(error.abs());
+        eprintln!("{id},{jd},{error:.4}");
+    }
+    eprintln!("max arcsec {maximum:?}");
+}
+
+#[test]
+#[ignore = "manual model discrepancy measurement"]
+fn probe_neptune_ingress() {
+    let mut left = 2460750.5;
+    let mut right = 2460770.5;
+    while right - left > 0.1 / 86400.0 {
+        let mid = (left + right) * 0.5;
+        if angular_difference(apparent_longitude(mid, Feature::NeptuneLongitude), 0.0) < 0.0 { left = mid; } else { right = mid; }
+    }
+    eprintln!("Neptune Aries model JD TT {:.12}", (left + right) * 0.5);
+}
+
+#[test]
 fn preserves_subminute_windows_with_second_level_refinement() {
     let date = 2451545.0;
     let feature = Feature::SunLongitude;
@@ -677,4 +706,178 @@ fn preserves_subminute_windows_with_second_level_refinement() {
     assert!((windows[0] - date).abs() * 86400.0 < 0.5);
     assert!((windows[1] - date).abs() * 86400.0 > 19.5);
     assert!((windows[1] - date).abs() * 86400.0 < 20.5);
+}
+
+// Isolated ephemeris investigation; does not alter the production position provider.
+#[test]
+#[ignore = "manual ephemeris diagnosis against retained JPL vectors"]
+fn diagnose_neptune_models() {
+    let rows = jpl_diagnostic_states();
+    let jpl = jpl_diagnostic_position;
+    for body in [399,899,8,10] {
+        for jd in [2460764.999763406-0.005,2460764.999763406-0.175] {
+            let reference=rows.iter().find(|r| r.0==body && (r.1-jd).abs()<1e-8).unwrap();
+            let error=vector_norm(vector_sub(jpl(body,jd),reference.2));
+            assert!(error<1e-10, "JPL interpolation error {error} AU");
+        }
+    }
+    let lon = |v: [f64;3]| v[1].atan2(v[0]).to_degrees();
+    let coords = |p: RectangularCoordinates| [p.x,p.y,p.z];
+    let astro_vector = |body: i32, jd: f64| {
+        let planet = if body == 399 { astro::planet::Planet::Earth } else { astro::planet::Planet::Neptune };
+        let (l,b,r)=astro::planet::heliocent_coords(&planet,jd);
+        let (l,b)=astro::precess::precess_ecl_coords(l,b,jd,2451545.0);
+        [r*b.cos()*l.cos(),r*b.cos()*l.sin(),r*b.sin()]
+    };
+    eprintln!("GEOMETRIC: jd,E_error_arcsec,A_error_arcsec,astro_error_arcsec,astro_minus_D_arcsec,center_minus_bary_arcsec");
+    for row in rows.iter().filter(|r| r.0 == 899 && (r.1 < 2460764.69 || r.1 > 2460765.03 || (r.1-2460764.999763406).abs()<1e-9)) {
+        let jd=row.1;
+        let reference=lon(vector_sub(row.2,jpl(399,jd)));
+        let e=lon(vector_sub(coords(vsop87e::neptune(jd)),coords(vsop87e::earth(jd))));
+        let a=lon(vector_sub(coords(vsop87a::neptune(jd)),coords(vsop87a::earth(jd))));
+        let av=lon(vector_sub(astro_vector(899,jd),astro_vector(399,jd)));
+        let (al,_,_)=astro::planet::heliocent_coords(&astro::planet::Planet::Neptune,jd);
+        let d=vsop87d::neptune(jd).longitude();
+        let cb=angular_difference(lon(vector_sub(jpl(899,jd),jpl(399,jd))),lon(vector_sub(jpl(8,jd),jpl(399,jd))))*3600.0;
+        eprintln!("GEOMETRIC,{jd},{:.6},{:.6},{:.6},{:.6},{cb:.6}",angular_difference(e,reference)*3600.0,angular_difference(a,reference)*3600.0,angular_difference(av,reference)*3600.0,angular_difference(al.to_degrees(),d.to_degrees())*3600.0);
+    }
+    let jd=2460764.999763406;
+    for source in ["vsopE","vsopA","astro","jplNeptune","jplEarth","jplBoth","jplBarycenter"] {
+        let provider = |t: f64, feature: Feature| {
+            let body = match feature { Feature::NeptuneLongitude=>899, Feature::SunLongitude=>10, _=>399 };
+            if source=="jplBoth" || source=="jplBarycenter" || (source=="jplNeptune" && body==899) || (source=="jplEarth" && body==399) { return jpl(if source=="jplBarycenter" && body==899 {8} else {body},t); }
+            if body==10 { return coords(vsop87e::sun(t)); }
+            if source=="astro" || source=="vsopA" {
+                let helio=if source=="astro" {astro_vector(body,t)} else if body==399 {coords(vsop87a::earth(t))} else {coords(vsop87a::neptune(t))};
+                let sun=coords(vsop87e::sun(t));
+                return std::array::from_fn(|i| helio[i]+sun[i]);
+            }
+            if body==399 {coords(vsop87e::earth(t))} else {coords(vsop87e::neptune(t))}
+        };
+        for fk5 in [false,true] {
+            let angle=diagnostic_apparent(jd,Feature::NeptuneLongitude,&provider,fk5);
+            if source == "jplBoth" && !fk5 {
+                // IERS finals.all, Bulletin A dPsi at 2025-03-30/31 00:00 UTC.
+                // The independent Horizons epoch is TT; interpolate EOP on UTC.
+                let fraction = jd - 2400000.5 - 69.184/86400.0 - 60764.0;
+                let eop_dpsi = (-109.679 + fraction * (-110.421 + 109.679)) / 1000.0;
+                let production_angle = apparent_longitude_with_ephemeris(jd, Feature::NeptuneLongitude, |t| jpl(399,t), |t,feature| jpl(if feature == Feature::SunLongitude {10} else {899},t));
+                let corrected_error = angular_difference(production_angle,0.0)*3600.0 + eop_dpsi;
+                eprintln!("EOP corrected JPL residual: {corrected_error:.6} arcsec");
+                assert!(corrected_error.abs() < 0.002, "Unexplained frame residual {corrected_error}");
+            }
+            let mut left=jd-0.02;
+            let mut right=jd+0.02;
+            while right-left > 0.01/86400.0 {
+                let mid=(left+right)*0.5;
+                if angular_difference(diagnostic_apparent(mid,Feature::NeptuneLongitude,&provider,fk5),0.0)<0.0 {left=mid;} else {right=mid;}
+            }
+            let seconds=((left+right)*0.5-jd)*86400.0;
+            eprintln!("APPARENT,{source},fk5={fk5},error_arcsec={:.6},root_error_seconds={seconds:.3}",angular_difference(angle,0.0)*3600.0);
+        }
+    }
+    let light_only=astro::planet::geocent_apprnt_ecl_coords(&astro::planet::Planet::Neptune,jd).0.long.to_degrees();
+    eprintln!("ASTRO_LIGHT_ONLY,error_arcsec={:.6}",angular_difference(light_only,0.0)*3600.0);
+}
+
+fn diagnostic_apparent(jd: f64, feature: Feature, provider: &impl Fn(f64, Feature) -> [f64; 3], fk5: bool) -> f64 {
+    const C_AU_DAY: f64 = 173.144632674240;
+    let earth = provider(jd, Feature::MoonPhaseAngle);
+    let mut emitted = jd;
+    let mut target = provider(emitted, feature);
+    for _ in 0..8 {
+        let next = jd - vector_norm(vector_sub(target, earth)) / C_AU_DAY;
+        if (next - emitted).abs() < 1e-10 { break; }
+        emitted = next;
+        target = provider(emitted, feature);
+    }
+    let mut direction = vector_unit(vector_sub(target, earth));
+    let sun = provider(jd, Feature::SunLongitude);
+    let solar_observer = vector_sub(earth, sun);
+    let solar_distance = vector_norm(solar_observer);
+    if feature != Feature::SunLongitude {
+        // Finite-distance solar deflection: Klioner (2003), expression 70.
+        let e = vector_unit(solar_observer);
+        let q = vector_unit(vector_sub(target, sun));
+        let denominator = (1.0 + vector_dot(q, e)).max(1e-6);
+        let weight = 1.97412574336e-8 / solar_distance / denominator;
+        let pq = vector_dot(direction, q);
+        let pe = vector_dot(direction, e);
+        for i in 0..3 { direction[i] += weight * (e[i] * pq - q[i] * pe); }
+        direction = vector_unit(direction);
+    }
+    let before = provider(jd - 0.01, Feature::MoonPhaseAngle);
+    let after = provider(jd + 0.01, Feature::MoonPhaseAngle);
+    let velocity = vector_sub(after, before).map(|v| v / (0.02 * C_AU_DAY));
+    let beta = (1.0 - vector_dot(velocity, velocity)).sqrt();
+    let projection = vector_dot(direction, velocity);
+    direction = vector_unit(std::array::from_fn(|i| beta * direction[i] + (1.0 + projection / (1.0 + beta)) * velocity[i]));
+    let longitude = direction[1].atan2(direction[0]);
+    let latitude = direction[2].asin();
+    let (longitude, latitude) = astro::precess::precess_ecl_coords(longitude, latitude, 2451545.0, jd);
+    let longitude = if fk5 { astro::planet::ecl_coords_to_FK5(jd, longitude, latitude).0 } else { longitude };
+    (longitude + astro::nutation::nutation(jd).0).to_degrees().rem_euclid(360.0)
+}
+
+#[test]
+fn packages_match_original_neptune_coefficients() {
+    for line in include_str!("../../fixtures/jpl/diagnosis/original_neptune.csv").lines().skip(1) {
+        let values: Vec<f64> = line.split(',').map(|x| x.parse().unwrap()).collect();
+        let jd=values[0];
+        let original=values[1].to_degrees();
+        let vsop=vsop87d::neptune(jd).longitude().to_degrees();
+        let astro=astro::planet::heliocent_coords(&astro::planet::Planet::Neptune,jd).0.to_degrees();
+        assert!(angular_difference(vsop,original).abs()*3600.0 < 1e-6);
+        assert!(angular_difference(astro,original).abs()*3600.0 < 1e-6);
+    }
+}
+
+
+#[test]
+fn vsop_frame_rotation_matches_published_fk5_correction() {
+    for longitude in [0.0_f64,45.0,90.0,180.0,270.0] {
+        for latitude in [-7.0_f64,0.0,7.0] {
+            let (l,b)=(longitude.to_radians(),latitude.to_radians());
+            let input=[b.cos()*l.cos(),b.cos()*l.sin(),b.sin()];
+            let output=vector_unit(vsop_to_fk5(input));
+            let expected=astro::planet::ecl_coords_to_FK5(2451545.0,l,b);
+            assert!(angular_difference(output[1].atan2(output[0]).to_degrees(),expected.0.to_degrees()).abs()*3600.0 < 1e-6);
+            assert!((output[2].asin()-expected.1).abs().to_degrees()*3600.0 < 1e-6);
+        }
+    }
+}
+
+type DiagnosticState = (i32, f64, [f64; 3], [f64; 3]);
+
+fn jpl_diagnostic_states() -> Vec<DiagnosticState> {
+    include_str!("../../fixtures/jpl/diagnosis/vectors.csv").lines().skip(1).map(|line| {
+        let v: Vec<f64> = line.split(',').map(|x| x.parse().unwrap()).collect();
+        (v[0] as i32, v[1], [v[2],v[3],v[4]], [v[5],v[6],v[7]])
+    }).collect()
+}
+
+// Cubic Hermite interpolation of retained JPL states; never used in production.
+fn jpl_diagnostic_position(body: i32, jd: f64) -> [f64;3] {
+    let rows = jpl_diagnostic_states();
+    let samples: Vec<&DiagnosticState> = rows.iter().filter(|r| r.0 == body && (r.1-(2460764.999763406-0.005)).abs()>1e-8 && (r.1-(2460764.999763406-0.175)).abs()>1e-8).collect();
+    if let Some(r) = samples.iter().find(|r| (r.1-jd).abs() < 1e-9) { return r.2; }
+    let pair = samples.windows(2).find(|p| p[0].1 <= jd && jd <= p[1].1).unwrap();
+    let (a,b) = (pair[0],pair[1]);
+    let h=b.1-a.1; assert!(h < 0.011, "interpolation outside dense region");
+    let t=(jd-a.1)/h;
+    std::array::from_fn(|i| (2.0*t*t*t-3.0*t*t+1.0)*a.2[i]+(t*t*t-2.0*t*t+t)*h*a.3[i]+(-2.0*t*t*t+3.0*t*t)*b.2[i]+(t*t*t-t*t)*h*b.3[i])
+
+}
+
+#[test]
+fn apparent_corrections_match_jpl_after_observed_nutation_adjustment() {
+    let jd=2460764.999763406;
+    let angle=apparent_longitude_with_ephemeris(jd, Feature::NeptuneLongitude, |t| jpl_diagnostic_position(399,t), |t,feature| jpl_diagnostic_position(if feature == Feature::SunLongitude {10} else {899},t));
+    // See fixtures/jpl/diagnosis/iers_nutation.txt for the retained source rows.
+    let fraction=jd-2400000.5-69.184/86400.0-60764.0;
+    let observed_dpsi=(-109.679+fraction*(-110.421+109.679))/1000.0;
+    let residual=angular_difference(angle,0.0)*3600.0+observed_dpsi;
+    // About 1.3 seconds at this crossing, including analytical model and
+    // rounded reference data differences; not a whole-domain accuracy claim.
+    assert!(residual.abs()<0.002, "JPL apparent residual {residual} arcsec");
 }

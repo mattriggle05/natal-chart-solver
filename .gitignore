@@ -36,3 +36,9 @@ crate/target/
 
 # Wasm binaries
 wasm/pkg
+# Reproducible JPL reference acquisition
+!scripts/fetch_jpl.py
+!scripts/probe_neptune.py
+!scripts/diagnose_ephemeris.py
+!scripts/check_vsop_coefficients.py
+__pycache__/
