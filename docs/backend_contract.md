@@ -37,3 +37,8 @@ Corrections include iterated light travel time, finite-distance solar gravitatio
 This is an analytical true-equinox-of-date convention, without measured Earth-orientation corrections. Horizons applies observed EOP corrections in the modern era. The retained 2025 Neptune diagnostic isolates that difference: about +0.1095 arcsecond before applying the independently published IERS dPsi adjustment, less than 0.002 arcsecond afterward when using JPL positions. EOP is used only in the test; the application downloads no ephemeris or EOP data. This single correction-pipeline check does not remove VSOP87's planetary model error or certify the full domain.
 
 Ephemeris arguments use TT; the millisecond-scale TT/TDB difference is neglected by these analytical models. The small solar-potential term in relativistic aberration is also omitted. Solar deflection uses the Sun at reception; light paths inside the Sun are regularized rather than physically modeled. These approximations are distinct from the measured Neptune model discrepancy. The correction tests and numerical refinement do not establish one-minute astronomical accuracy.
+
+
+## Position regression coverage
+
+The fixed JPL regression suite checks 108 body positions and 12 derived Moon phase angles, plus the known Neptune ingress position. Per-feature angular budgets, measured residuals, and offline provenance verification are recorded in [fixtures/jpl/README.md](../fixtures/jpl/README.md). These sampled checks replace the earlier broad Sun/Moon/phase tolerances; they do not certify every epoch or complete search windows. Complete window tests remain the next milestone.

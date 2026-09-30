@@ -86,60 +86,6 @@ fn maps_angles_to_half_open_constraints() {
 }
 
 #[test]
-fn matches_reference_sun_longitudes_across_supported_centuries() {
-    // NASA JPL Horizons DE441 apparent geocentric ecliptic-of-date longitude, quantity 31.
-    // The tolerance covers the expected difference between VSOP87's geometric coordinates
-    // and Horizons' light-time, aberration, and gravitational-deflection corrections.
-    const MAX_DIFFERENCE_DEGREES: f64 = 0.02;
-    let cases = [
-        (2_415_021.0, 280.663_243_8), // 1900-01-01 12:00 TT
-        (2_451_545.0, 280.368_151_9), // 2000-01-01 12:00 TT
-        (2_488_070.0, 281.112_835_3), // 2100-01-01 12:00 TT
-    ];
-
-    for (julian_date, reference_longitude) in cases {
-        let longitude = feature_angle(julian_date, 10);
-        let difference = angular_difference(longitude, reference_longitude).abs();
-        assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, longitude={longitude}, reference_longitude={reference_longitude}, difference={difference}");
-    }
-}
-
-#[test]
-fn matches_reference_moon_longitudes_across_supported_centuries() {
-    // NASA JPL Horizons DE441 apparent geocentric ecliptic-of-date longitude, quantity 31.
-    // The tolerance covers nutation, light-time, and model differences from the mean geometric longitude.
-    const MAX_DIFFERENCE_DEGREES: f64 = 0.02;
-    let cases = [
-        (2_415_021.0, 279.616_644_4), // 1900-01-01 12:00 TT
-        (2_451_545.0, 223.314_855_7), // 2000-01-01 12:00 TT
-        (2_488_070.0, 164.412_513_6), // 2100-01-01 12:00 TT
-    ];
-
-    for (julian_date, reference_longitude) in cases {
-        let longitude = feature_angle(julian_date, Feature::MoonLongitude as u8);
-        let difference = angular_difference(longitude, reference_longitude).abs();
-        assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, longitude={longitude}, reference_longitude={reference_longitude}, difference={difference}");
-    }
-}
-
-#[test]
-fn matches_reference_moon_phase_angles_across_supported_centuries() {
-    // Differences between the NASA JPL Horizons Moon and Sun quantity 31 longitudes.
-    const MAX_DIFFERENCE_DEGREES: f64 = 0.03;
-    let cases = [
-        (2_415_021.0, 358.953_400_6),
-        (2_451_545.0, 302.946_703_8),
-        (2_488_070.0, 243.299_678_3),
-    ];
-
-    for (julian_date, reference_phase_angle) in cases {
-        let phase_angle = angle_at(julian_date, Feature::MoonPhaseAngle);
-        let difference = angular_difference(phase_angle, reference_phase_angle).abs();
-        assert!(difference < MAX_DIFFERENCE_DEGREES, "julian_date={julian_date}, phase_angle={phase_angle}, reference_phase_angle={reference_phase_angle}, difference={difference}");
-    }
-}
-
-#[test]
 fn matches_reference_2024_moon_phase_times() {
     // NASA GSFC phase times in UTC. The 15-minute tolerance includes UTC-to-TT conversion
     // and the documented accuracy of the lunar and solar position models.
@@ -666,21 +612,79 @@ fn randomized_search_matches_direct_evaluation() {
     }
 }
 
-#[test]
-#[ignore = "manual position survey; acceptance fixtures are task 2"]
-fn probe_apparent_positions() {
-    let mut maximum = [0.0_f64; 17];
-    for line in include_str!("../../fixtures/jpl/positions.csv").lines().skip(1) {
-        let values: Vec<&str> = line.split(',').collect();
-        let id: u8 = values[0].parse().unwrap();
-        let jd: f64 = values[1].parse().unwrap();
-        let expected: f64 = values[2].parse().unwrap();
-        let actual = apparent_longitude(jd, Feature::try_from(id).unwrap());
-        let error = angular_difference(actual, expected) * 3600.0;
-        maximum[id as usize] = maximum[id as usize].max(error.abs());
-        eprintln!("{id},{jd},{error:.4}");
+// Fixed sampled regression limits, not whole-domain ephemeris guarantees.
+// Rationale and reference provenance: fixtures/jpl/README.md.
+const JPL_POSITION_LIMITS_ARCSEC: [(u8, f64); 9] = [(0,0.2),(1,0.2),(3,0.2),(4,0.75),(5,0.75),(6,1.5),(7,3.0),(10,0.2),(11,10.0)];
+const JPL_POSITION_DATES: [f64; 12] = [2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5];
+
+fn jpl_position_fixtures() -> Vec<(u8, f64, f64)> {
+    let mut lines = include_str!("../../fixtures/jpl/positions.csv").lines();
+    assert_eq!(lines.next(), Some("feature,jd_tt,longitude_deg,latitude_deg"));
+    let rows: Vec<_> = lines.map(|line| {
+        let columns: Vec<_> = line.split(',').collect();
+        assert_eq!(columns.len(), 4);
+        let id = columns[0].parse::<u8>().unwrap();
+        let jd = columns[1].parse::<f64>().unwrap();
+        let longitude = columns[2].parse::<f64>().unwrap();
+        let latitude = columns[3].parse::<f64>().unwrap();
+        assert!((0.0..360.0).contains(&longitude));
+        assert!((-90.0..=90.0).contains(&latitude));
+        assert!(JPL_POSITION_LIMITS_ARCSEC.iter().any(|&(feature,_)| feature == id));
+        (id,jd,longitude)
+    }).collect();
+    assert_eq!(rows.len(), 108);
+    for (id,_) in JPL_POSITION_LIMITS_ARCSEC {
+        let dates: Vec<_> = rows.iter().filter(|row| row.0 == id).map(|row| row.1).collect();
+        // Also catches duplicate, missing, reordered, nonfinite, or changed epochs.
+        assert_eq!(dates, JPL_POSITION_DATES, "Incomplete reference coverage for feature {id}");
     }
-    eprintln!("max arcsec {maximum:?}");
+    rows
+}
+
+#[test]
+fn apparent_positions_match_jpl_samples() {
+    let fixtures = jpl_position_fixtures();
+    for (id,limit) in JPL_POSITION_LIMITS_ARCSEC {
+        let feature = feature_from_id(id);
+        let mut maximum = 0.0_f64;
+        for &(_,jd,expected) in fixtures.iter().filter(|row| row.0 == id) {
+            let actual = angle_at(jd,feature);
+            assert!((0.0..360.0).contains(&actual));
+            let error = angular_difference(actual,expected).abs()*3600.0;
+            assert!(error <= limit, "feature={feature:?}, jd_tt={jd}, actual={actual}, JPL={expected}, error={error} arcsec, limit={limit}");
+            maximum = maximum.max(error);
+        }
+        eprintln!("JPL {feature:?}: maximum={maximum:.6} arcsec, limit={limit}");
+    }
+}
+
+#[test]
+fn apparent_moon_phase_matches_independent_jpl_positions() {
+    let fixtures = jpl_position_fixtures();
+    // Triangle inequality: 10 arcsec Moon budget + 0.2 arcsec Sun budget.
+    let limit = 10.2;
+    let mut maximum = 0.0_f64;
+    for jd in JPL_POSITION_DATES {
+        let sun = fixtures.iter().find(|r| r.0 == 10 && r.1 == jd).unwrap().2;
+        let moon = fixtures.iter().find(|r| r.0 == 11 && r.1 == jd).unwrap().2;
+        let expected = (moon-sun).rem_euclid(360.0);
+        let actual = angle_at(jd,Feature::MoonPhaseAngle);
+        assert!((0.0..360.0).contains(&actual));
+        let error = angular_difference(actual,expected).abs()*3600.0;
+        assert!(error <= limit, "jd_tt={jd}, actual={actual}, JPL={expected}, error={error} arcsec, limit={limit}");
+        maximum = maximum.max(error);
+    }
+    eprintln!("JPL MoonPhaseAngle: maximum={maximum:.6} arcsec, limit={limit}");
+}
+
+#[test]
+fn neptune_position_at_jpl_aries_ingress_stays_within_model_budget() {
+    // Independent crossing and raw responses: fixtures/jpl/neptune_ingress.json.
+    // A position budget here intentionally does NOT imply a minute time budget.
+    let jd = 2460764.999763406;
+    let error = angular_difference(angle_at(jd,Feature::NeptuneLongitude),0.0)*3600.0;
+    assert!(error.abs() <= 3.0, "Neptune error at JPL Aries ingress: {error} arcsec");
+    eprintln!("Neptune at JPL Aries ingress: signed error={error:.6} arcsec");
 }
 
 #[test]
