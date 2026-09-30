@@ -107,7 +107,7 @@ during development (~3-8 second rebuilds vs 30+ for release).
 
 ## Astronomical Model
 
-The production backend remains Rust with the existing VSOP87 and astro models. Complete correctness testing and a working product in Rust first; a C/WASM worker or C translation is deferred as a future optimization. The isolated measurements remain in `../benchmarks/ephemeris/RESULTS.md`. The apparent implementation, position regression suite, and fixed reference-window suite are implemented. The next gate is the final acceptance pass, followed by the rudimentary UI.
+The production backend remains Rust with the existing VSOP87 and astro models. Complete correctness testing and a working product in Rust first; a C/WASM worker or C translation is deferred as a future optimization. The isolated measurements remain in `../benchmarks/ephemeris/RESULTS.md`. The apparent implementation, position regression suite, and fixed reference-window suite are implemented. The final acceptance pass passed on 2026-09-30; the next milestone is the rudimentary UI.
 
 ### Coordinate System and Apparent Positions
 
@@ -403,7 +403,7 @@ windows. Adding the lunar model increased the optimized WASM from 1,965.54 kB to
 
 The fixed position suite checks 108 body positions and 12 independently derived phase angles across representative 1900–2100 epochs. The complete-window suite checks 12 searches in 2024–2025 and returns all 15 independently constructed JPL windows. Its maximum non-Neptune endpoint difference is 9.422 seconds; the Neptune example is 919.622 seconds early. These are internal TT results before display rounding, not global accuracy bounds. Full measurements and case-specific limits are linked from the backend contract.
 
-The remaining backend preparation is the final combined acceptance pass. Then build the editable search form, worker lifecycle/error handling, and readable results. Engine replacement, streaming, multi-worker execution, caching, and additional bodies are deferred in [TODO.md](TODO.md); they do not block the UI milestone.
+Backend preparation passed its final combined acceptance checks; see [backend_acceptance.md](backend_acceptance.md). Next, build the editable search form, worker lifecycle/error handling, and readable results. Engine replacement, streaming, multi-worker execution, caching, and additional bodies are deferred in [TODO.md](TODO.md); they do not block the UI milestone.
 
 ---
 

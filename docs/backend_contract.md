@@ -1,6 +1,6 @@
 # Backend calculation contract
 
-Status as of 2026-09-30: the apparent-position implementation and fixed reference suites are complete. The final combined acceptance pass is still pending. This contract describes a prototype; public acceptance of its astronomical limitations remains a separate release decision.
+Status as of 2026-09-30: the apparent-position implementation and fixed reference suites are complete. The final combined acceptance pass passed; see [backend_acceptance.md](backend_acceptance.md). This contract describes a prototype; public acceptance of its astronomical limitations remains a separate release decision.
 
 ## Search domain
 
@@ -68,6 +68,6 @@ Historical UT estimates and unknown future leap seconds add civil-time uncertain
 
 ## Validation boundary and next milestone
 
-The bounded position and complete-window suites are sufficient inputs to the planned final acceptance pass; no exhaustive ingress survey or new ephemeris investigation is required before the UI. Step 5 runs the existing full Rust suite, TypeScript time tests, offline fixture verification, and production WASM/TypeScript/Vite build together. New work is justified by an actual failure or an explicitly expanded requirement, not by the possibility of adding more samples indefinitely.
+The bounded position and complete-window suites and final acceptance pass are complete. The full Rust suite, TypeScript time tests, offline fixture verification, and production WASM/TypeScript/Vite build passed on 2026-09-30. No exhaustive ingress survey or new ephemeris investigation is required before the UI. New work is justified by an actual failure or an explicitly expanded requirement, not by the possibility of adding more samples indefinitely.
 
-After that pass, begin the rudimentary UI described in [TODO.md](TODO.md). Keep VSOP87, Rust, and the documented limitations. Ephemeris replacement, stronger global accuracy guarantees, and broader performance optimization remain deferred. This is a development stopping rule, not approval of the unresolved public-release accuracy promise.
+The next work is the rudimentary UI described in [TODO.md](TODO.md). Keep VSOP87, Rust, and the documented limitations. Ephemeris replacement, stronger global accuracy guarantees, and broader performance optimization remain deferred. This is a development stopping rule, not approval of the unresolved public-release accuracy promise.
