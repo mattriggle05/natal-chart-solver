@@ -1,5 +1,7 @@
 # Backend calculation contract
 
+Status as of 2026-09-30: the apparent-position implementation and fixed reference suites are complete. The final combined acceptance pass is still pending. This contract describes a prototype; public acceptance of its astronomical limitations remains a separate release decision.
+
 ## Search domain
 
 The initial search domain is `[1900-01-01 00:00 TT, 2100-01-01 00:00 TT)`, expressed as `[2415020.5, 2488069.5)` in JD(TT). The end instant may be supplied as an exclusive search endpoint. This is a fixed 200-year domain, not a moving interval relative to the browser clock, and does not include the remainder of calendar year 2100.
@@ -42,3 +44,30 @@ Ephemeris arguments use TT; the millisecond-scale TT/TDB difference is neglected
 ## Position regression coverage
 
 The fixed JPL regression suite checks 108 body positions and 12 derived Moon phase angles, plus the known Neptune ingress position. Per-feature angular budgets, measured residuals, and offline provenance verification are recorded in [fixtures/jpl/README.md](../fixtures/jpl/README.md). These sampled checks replace the earlier broad Sun/Moon/phase tolerances; they do not certify every epoch or complete search windows. The fixed complete-window suite is documented in [fixtures/jpl/windows/README.md](../fixtures/jpl/windows/README.md): 12 JPL-derived searches, exact window-count and clipping checks, and separate case-specific timing budgets. It retains the known Neptune discrepancy and does not establish a universal one-minute accuracy guarantee.
+
+
+## Measured accuracy and interpretation
+
+| Layer | Established behavior or measurement | What it does not establish |
+|---|---|---|
+| Numerical refinement | One-second brackets; midpoint error at most half a second for a correctly bracketed model root | Accuracy of the astronomical model or completeness of station detection |
+| Display | Nearest civil minute; up to 30 seconds of rounding | A one-minute astronomical guarantee |
+| Position comparisons | 108 body samples at 12 epochs spanning the domain; 12 phase samples derived from JPL | Maximum error between samples or at every boundary/station |
+| Complete search comparisons | 12 fixed searches in 2024–2025; all 15 expected windows returned, with no missing or extra windows | Completeness of every possible query across 1900–2100 |
+| Non-Neptune window endpoints | Largest absolute difference in this suite: 9.422 seconds against JPL, before display rounding | A global ten-second bound or a bound for all other planets |
+| Neptune window endpoint | 919.622 seconds early, about 15.33 minutes, at the tested 2025 Aries ingress | A constant correction or maximum possible Neptune error |
+| Correction-pipeline isolation | JPL positions plus a test-only observed nutation adjustment leave about 0.00056 arcsecond residual at one epoch | Accuracy of production VSOP87 positions or the absence of all other frame/model differences |
+
+The position samples' largest residuals include 2.539385 arcseconds for Neptune, 5.320064 arcseconds for the Moon, and 5.275545 arcseconds for derived Moon phase. The full per-feature measurements and regression limits live in the position fixture README. The complete-window suite covers Sun, Moon, phase, Mercury, and Neptune, including one Sun/Moon combination; it does not yet establish complete-window accuracy for Venus, Mars, Jupiter, Saturn, or Uranus.
+
+Regression limits are explicit test budgets chosen to detect changes to the diagnosed implementation. They are not observational uncertainties or global error bounds. In particular, the Neptune case's 1,200-second allowance records a known limitation; passing that test is not acceptance of twenty-minute accuracy as a product requirement. Do not enlarge a failing limit without diagnosing the change.
+
+During approximately the interval separating our predicted sign entry from an independent chart's sign entry, the two models can assign different signs. This can shift an overlap or make a short matching window appear or disappear. The fixed suite found no missing/extra windows, but does not rule them out for other queries. Near a station, angular motion approaches zero, so even a small longitude error can imply a large boundary-time error. A fixed minute adjustment or a whole-domain guarantee inferred from these samples is not justified.
+
+Historical UT estimates and unknown future leap seconds add civil-time uncertainty separately from model error. The reference-window comparisons use TT directly; their measured timing differences do not include civil-time conversion or minute rounding. The user-facing wording should state that boundaries are approximate and displayed to the nearest minute, rather than describing them as accurate to one minute.
+
+## Validation boundary and next milestone
+
+The bounded position and complete-window suites are sufficient inputs to the planned final acceptance pass; no exhaustive ingress survey or new ephemeris investigation is required before the UI. Step 5 runs the existing full Rust suite, TypeScript time tests, offline fixture verification, and production WASM/TypeScript/Vite build together. New work is justified by an actual failure or an explicitly expanded requirement, not by the possibility of adding more samples indefinitely.
+
+After that pass, begin the rudimentary UI described in [TODO.md](TODO.md). Keep VSOP87, Rust, and the documented limitations. Ephemeris replacement, stronger global accuracy guarantees, and broader performance optimization remain deferred. This is a development stopping rule, not approval of the unresolved public-release accuracy promise.

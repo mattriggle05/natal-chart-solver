@@ -1,5 +1,7 @@
 # Natal Chart Solver — Design & Context Document
 
+The current milestone order is defined in [TODO.md](TODO.md). Coordinate conventions, measured accuracy, and limitations are defined in [backend_contract.md](backend_contract.md); historical measurements below are not current performance guarantees.
+
 ## Project Overview
 
 A browser-based astronomical alignment search engine that finds historical and future
@@ -53,7 +55,7 @@ React Component
   → calls search(params) from custom hook
       → hook postMessages to Worker
           → Worker calls Rust WASM find function
-          → Rust streams results back via postMessage
+          → Rust returns the completed result; Worker sends it via postMessage
       → hook updates React state
   → component re-renders with results
 ```
@@ -105,7 +107,7 @@ during development (~3-8 second rebuilds vs 30+ for release).
 
 ## Astronomical Model
 
-The production backend remains Rust with the existing VSOP87 and astro models. Complete correctness testing and a working product in Rust first; a C/WASM worker or C translation is deferred as a future optimization. The isolated measurements remain in `../benchmarks/ephemeris/RESULTS.md`. Planetary boundary/station verification and a formal time/accuracy contract are the next backend priorities.
+The production backend remains Rust with the existing VSOP87 and astro models. Complete correctness testing and a working product in Rust first; a C/WASM worker or C translation is deferred as a future optimization. The isolated measurements remain in `../benchmarks/ephemeris/RESULTS.md`. The apparent implementation, position regression suite, and fixed reference-window suite are implemented. The next gate is the final acceptance pass, followed by the rudimentary UI.
 
 ### Coordinate System and Apparent Positions
 
@@ -238,16 +240,7 @@ Computes geocentric angular velocity in degrees/day using the centered finite di
 ```
 v(t) = (longitude(t + H) - longitude(t - H)) / (2H)
 ```
-Where `H = 6e-6` days (cube root of f64::EPSILON — optimal h that balances truncation
-error O(h²) against floating point cancellation error O(ε/h)).
-
-**Why centered difference over one-sided:**
-The centered difference is ~400x more accurate near velocity zero (at retrograde stations).
-Near a station the true velocity is tiny — a one-sided error of 1.5e-8 could flip the
-sign where the centered error of 3.6e-11 would not. Sign correctness at stations is
-critical for the algorithm.
-
-Cost: 2 VSOP87 calls per evaluation (4 total including earth computation).
+The implemented `H` is `6e-6` days. Centering avoids the first-order truncation error of a one-sided difference, but this step is not a proved optimum or a universal derivative error bound. Each velocity evaluation calls the full apparent-position pipeline twice. Station and window regression tests check the behavior at selected cases.
 
 ---
 
@@ -261,7 +254,7 @@ Finds the Julian date of a retrograde station (velocity zero) within a given int
 using bisection. Caller must guarantee opposite velocity signs at endpoints.
 
 **Termination conditions:**
-- `|velocity| <= 6e-12` degrees/day (proportional to H² — the error floor of `instantaneous_velocity`)
+- Exact numerical zero velocity (including at a bracket endpoint)
 - Interval width < 1 second (1/86400 days); return the bracket midpoint
 
 **Bisection direction:** Uses `f64_same_sign` against reference velocity at `left` to
@@ -365,9 +358,7 @@ motion between coarse samples.
 **Implemented solution:**
 1. Use `instantaneous_velocity()` at each coarse step — not average velocity
 2. When velocity sign changes between steps, bisect to find the exact station time
-3. This is guaranteed correct because planetary retrogrades have a physical minimum
-   duration governed by orbital mechanics — the minimum retrograde duration sets the
-   safe step size, not an arbitrary choice
+3. Split at the detected station and refine each resulting segment. Per-body coarse steps aim to avoid multiple stations within one segment; selected regression cases support their use, but are not an exhaustive proof for every possible query.
 
 ### The Aliasing Problem
 Using `curr_lon - prev_lon` as a velocity proxy can give the wrong sign when a station
@@ -375,11 +366,9 @@ occurs near the end of a step (the planet slows, turns, but hasn't traveled back
 enough to make the net displacement negative). The implementation avoids this by using
 `instantaneous_velocity()` at both ends of each coarse segment.
 
-### Monotonic Interval Guarantee
+### Monotonic Interval Assumption
 Between any two consecutive retrograde stations, a planet's geocentric longitude is
-strictly monotonic. The algorithm partitions time into monotonic intervals using station
-times as breakpoints, detects either or both constraint boundaries within each segment,
-and refines every crossing independently.
+strictly monotonic. The algorithm treats segments between detected stations as monotonic, detects either or both constraint boundaries within each segment, and refines each crossing independently. Completeness depends on detecting the relevant stations; the finite reference suite does not prove that prerequisite for every epoch.
 
 ### Safe Step Sizes
 The step must keep angular displacement below 180° so direction can be unwrapped
@@ -400,7 +389,7 @@ both boundaries can be detected between samples.
 | Uranus | 75d          |
 | Neptune| 78d          |
 
-Native release profiling over 2000–2010 measured a standalone Moon-longitude sign
+Historical profiling of the earlier geometric implementation over 2000–2010 measured a standalone Moon-longitude sign
 search at approximately 12 ms and a standalone Moon-phase sign search at approximately
 360 ms. The latter includes the existing VSOP87 Sun calculation. In a ten-feature
 query with the Sun evaluated first, the Moon-longitude and Moon-phase stages took
@@ -410,61 +399,11 @@ windows. Adding the lunar model increased the optimized WASM from 1,965.54 kB to
 
 ---
 
-## Future Work / Incomplete Items
+## Current Validation and Remaining Work
 
-### High Priority
+The fixed position suite checks 108 body positions and 12 independently derived phase angles across representative 1900–2100 epochs. The complete-window suite checks 12 searches in 2024–2025 and returns all 15 independently constructed JPL windows. Its maximum non-Neptune endpoint difference is 9.422 seconds; the Neptune example is 919.622 seconds early. These are internal TT results before display rounding, not global accuracy bounds. Full measurements and case-specific limits are linked from the backend contract.
 
-**1. Streaming results back to UI**
-Currently `search` returns only after full computation. Pass a `js_sys::Function`
-callback into the Rust function and call it with each window as it's found. The UI
-can then populate progressively rather than waiting for completion.
-
-### Medium Priority
-
-**6. Multi-worker parallelism**
-Split the date range across N workers (N = navigator.hardwareConcurrency).
-Each worker searches a sub-range and posts results back. An orchestrator merges
-and sorts. SharedArrayBuffer not needed — independent workers with postMessage
-coordination is sufficient.
-
-**7. Dynamic worker count based on device capability**
-Use `navigator.hardwareConcurrency` and `navigator.deviceMemory` to choose worker
-count. Run a micro-benchmark on first load and cache result in localStorage.
-
-**9. Pluto support**
-Small dedicated series from Meeus Ch. 37 (~40 terms). Manual implementation.
-
-**10. Brent's method**
-Replace plain bisection with Brent's method for faster convergence.
-Reference: argmin crate `BrentRoot` implementation.
-
-**11. Cancellation**
-When user changes search parameters mid-computation, terminate the worker and spawn
-a fresh one. Keep a compiled `WebAssembly.Module` object to pass to the new worker
-to avoid recompilation cost.
-
-### Lower Priority
-
-**12. Precomputed ephemeris tile cache**
-For the common case (inner solar system, popular date ranges), precompute planet
-longitudes every 0.5 days as a compact binary (Float32, delta-encoded). Deliver as
-a static asset (~3.5MB compressed). WASM reads from table + linear interpolation,
-falling back to full VSOP87 only for refinement. 5-10x speedup potential.
-
-**13. Service Worker caching**
-Cache WASM binary and any ephemeris tiles via Cache API. Instant repeat loads,
-offline support.
-
-**14. User input UI**
-Currently the search is hardcoded in `SearchBox`. Need a proper UI for:
-- Selecting planets
-- Selecting zodiac signs per planet
-- Date range selection
-- Results display with JD→calendar conversion
-
-**15. Ecliptic dial input**
-Draggable SVG dial for each planet showing ecliptic position. Users drag to their
-natal chart position rather than selecting a sign from a dropdown.
+The remaining backend preparation is the final combined acceptance pass. Then build the editable search form, worker lifecycle/error handling, and readable results. Engine replacement, streaming, multi-worker execution, caching, and additional bodies are deferred in [TODO.md](TODO.md); they do not block the UI milestone.
 
 ---
 
@@ -492,16 +431,6 @@ astro = "2.0"
 
 ---
 
-## Resume Description
+## Project Summary
 
-> **Natal Chart Solver** — Built a browser-based astronomical alignment search engine
-> that calculates historical dates matching a given planetary configuration across a
-> 100-year span using VSOP87 ephemeris data compiled to WebAssembly via Rust.
-
-> Architected a multi-threaded computation pipeline using Web Workers and Rust→WASM
-> to offload intensive planetary calculations off the main thread, keeping the
-> React/TypeScript UI fully responsive during searches.
-
-> Deployed as a fully serverless application — all computation runs client-side,
-> eliminating backend infrastructure costs while achieving sub-300ms search times
-> across 12 planetary bodies.
+A browser-based reverse search for dates matching selected planetary signs, using Rust compiled to WebAssembly in a Web Worker. The initial domain is 1900–2100 with minute display and documented astronomical limitations. Search correctness has finite regression coverage; the editable first-version UI and public-release acceptance work remain pending. No universal latency or one-minute astronomical accuracy claim is established.
