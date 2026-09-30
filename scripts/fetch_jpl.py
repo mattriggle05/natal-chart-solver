@@ -25,7 +25,7 @@ def fetch(command, dates):
     records = list(csv.reader(io.StringIO(result.split('$$SOE')[1].split('$$EOE')[0].strip())))
     values = [(float(row[0]),float(row[3]),float(row[4])) for row in records]
     if len(values) != len(dates):
-        raise RuntimeError('Unexpected record count')
+        raise RuntimeError(f'Unexpected record count: requested {len(dates)}, returned {len(values)}; first/last {values[:1]} {values[-1:]}')
     return params, raw, values
 
 def verify_fixtures():

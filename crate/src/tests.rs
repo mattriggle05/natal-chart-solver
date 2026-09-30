@@ -885,3 +885,55 @@ fn apparent_corrections_match_jpl_after_observed_nutation_adjustment() {
     // rounded reference data differences; not a whole-domain accuracy claim.
     assert!(residual.abs()<0.002, "JPL apparent residual {residual} arcsec");
 }
+
+#[test]
+fn complete_search_windows_match_fixed_jpl_references() {
+    let expected_names = ["sun_aries", "moon_wrapped", "moon_phase", "mercury_reentry", "mercury_station_window", "sun_and_moon", "clipped_both", "clipped_start", "clipped_end", "empty_combination", "neptune_aries", "sun_subminute"];
+    let lines: Vec<_> = include_str!("../../fixtures/jpl/windows/cases.txt").lines().collect();
+    assert_eq!(lines.len(), expected_names.len());
+    for (line, expected_name) in lines.iter().zip(expected_names) {
+        let columns: Vec<_> = line.split('|').collect();
+        assert_eq!(columns.len(), 8);
+        let name = columns[0];
+        assert_eq!(name, expected_name);
+        let start: f64 = columns[1].parse().unwrap();
+        let end: f64 = columns[2].parse().unwrap();
+        let ids: Vec<u8> = columns[3].split(',').map(|v| v.parse().unwrap()).collect();
+        let numbers = |column: &str| -> Vec<f64> { if column.is_empty() { vec![] } else { column.split(',').map(|v| v.parse().unwrap()).collect() } };
+        let starts = numbers(columns[4]);
+        let spans = numbers(columns[5]);
+        let tolerance: f64 = columns[6].parse().unwrap();
+        let expected = numbers(columns[7]);
+        let actual = search(start, end, &ids, &starts, &spans).expect("valid reference request");
+        // Count differences are failures regardless of the permitted timing error.
+        assert_eq!(actual.len(), expected.len(), "{name}: missing/extra windows; actual={actual:?}, JPL={expected:?}");
+        assert_eq!(expected.len()%2, 0);
+        let mut previous_end = start;
+        for window in actual.chunks_exact(2) {
+            assert!(window[0].is_finite() && window[1].is_finite());
+            assert!(window[0] >= previous_end && window[0] < window[1] && window[1] <= end, "{name}: invalid order or bounds: {actual:?}");
+            let midpoint = (window[0]+window[1])*0.5;
+            for ((&id,&arc_start),&span) in ids.iter().zip(&starts).zip(&spans) {
+                assert!(angle_is_in_range(angle_at(midpoint,feature_from_id(id)),arc_start,span), "{name}: computed window interior violates a constraint");
+            }
+            previous_end = window[1];
+        }
+        let mut maximum = 0.0_f64;
+        for (&computed,&reference) in actual.iter().zip(&expected) {
+            if reference == start || reference == end {
+                assert_eq!(computed,reference,"{name}: clipped endpoint must be exact");
+            } else {
+                let error = (computed-reference).abs()*86400.0;
+                assert!(error <= tolerance, "{name}: endpoint error {error:.3}s exceeds {tolerance}s; actual={actual:?}, JPL={expected:?}");
+                maximum = maximum.max(error);
+            }
+        }
+        if name == "sun_subminute" {
+            assert_eq!(actual.len(),2);
+            assert!((actual[1]-actual[0])*86400.0 < 60.0);
+        }
+        if name == "mercury_reentry" { assert!(expected.len() >= 4, "reference must exercise multiple windows"); }
+        if name == "empty_combination" { assert!(expected.is_empty()); }
+        eprintln!("JPL search {name}: {} windows, maximum endpoint error={maximum:.3}s, budget={tolerance}s",actual.len()/2);
+    }
+}

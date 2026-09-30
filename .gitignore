@@ -42,3 +42,5 @@ wasm/pkg
 !scripts/diagnose_ephemeris.py
 !scripts/check_vsop_coefficients.py
 __pycache__/
+
+!scripts/fetch_jpl_windows.py
