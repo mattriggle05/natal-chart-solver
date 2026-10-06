@@ -1,57 +1,56 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { formatWindowMinutes } from '../utils/time';
 import type { JulianDateTt } from '../utils/time';
-import { Feature } from '../types/features';
-
-export interface SearchParams {
-    startJdTt: JulianDateTt;
-    endJdTt: JulianDateTt;
-    featureIds: Feature[];
-    angleStarts: number[];
-    angleSpans: number[];
-}
+import type { SearchParams, SearchResponse } from '../types/search';
 
 export function useDataSearch() {
     const workerRef = useRef<Worker | null>(null);
-    const [results, setResults] = useState<Float64Array>(new Float64Array());
+    const [busy, setBusy] = useState(false);
+    const [output, setOutput] = useState('Choose signs and dates, then select Search.');
+    useEffect(() => () => workerRef.current?.terminate(), []);
 
-    useEffect(() => {
-        workerRef.current = new Worker(
-            new URL('../workers/searchWorker.ts', import.meta.url),
-            { type: 'module' }
-        );
+    function cancel() {
+        workerRef.current?.terminate();
+        workerRef.current = null;
+        setBusy(false);
+        setOutput('Search cancelled.');
+    }
 
-
-        workerRef.current.onerror = (event: ErrorEvent) => {
-            console.error('Worker error:', event.message, event.filename, event.lineno);
-        };
-
-        workerRef.current.addEventListener('messageerror', (event) => {
-            console.error('Worker message error:', event);
-        });
-
-        workerRef.current.onmessage = (e) => {
-            if (e.data.type === 'complete') {
-                console.log('complete received')
-                const result = e.data.result as Float64Array;
-                console.log(e.data)
-                console.log(result)
-                setResults(result);
-            }
-
-            if (e.data.type === 'ERROR') {
-                console.error('WASM worker error:', e.data.message);
-            }
-        };
-
-        return () => workerRef.current?.terminate();
-    }, []);
-
-    const search = useCallback((params: SearchParams) => {
-        console.log('search called')
-        console.log(params)
-        setResults(new Float64Array());
-        workerRef.current?.postMessage({ type: 'search', params });
-    }, []);
-
-    return { search, results }
+    function search(params: SearchParams) {
+        workerRef.current?.terminate();
+        setBusy(true);
+        setOutput('Initializing search…');
+        let worker: Worker;
+        try {
+            worker = new Worker(new URL('../workers/searchWorker.ts', import.meta.url), { type: 'module' });
+            workerRef.current = worker;
+            const finish = (message: string) => {
+                if (workerRef.current !== worker) return;
+                setOutput(message);
+                setBusy(false);
+                worker.terminate();
+                workerRef.current = null;
+            };
+            worker.onerror = event => finish(`Error: ${event.message || 'Search worker failed.'}`);
+            worker.onmessageerror = () => finish('Error: Could not read the worker response.');
+            worker.onmessage = (event: MessageEvent<SearchResponse>) => {
+                if (workerRef.current !== worker) return;
+                const message = event.data;
+                if (message.type === 'searching') { setOutput('Searching…'); return; }
+                if (message.type === 'error') { finish(`Error: ${message.message}`); return; }
+                const windows: string[] = [];
+                for (let i = 0; i < message.result.length; i += 2) {
+                    windows.push(formatWindowMinutes(message.result[i] as JulianDateTt, message.result[i + 1] as JulianDateTt));
+                }
+                finish(windows.length ? `${windows.length} matching interval(s)\n${windows.join('\n')}` : 'No matching intervals.');
+            };
+            worker.postMessage(params);
+        } catch (error) {
+            workerRef.current?.terminate();
+            workerRef.current = null;
+            setBusy(false);
+            setOutput(`Error: ${String(error)}`);
+        }
+    }
+    return { search, cancel, busy, output };
 }

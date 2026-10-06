@@ -1,37 +1,49 @@
-import { civilDateToJdTt, formatWindowMinutes } from '../utils/time';
-import type { JulianDateTt } from '../utils/time';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { useDataSearch } from '../hooks/useDateSearch';
 import { Feature } from '../types/features';
-import styles from './SearchBox.module.css';
+import { Signs } from '../types/signs';
 
-function formatResults(raw: Float64Array): string {
-    const windows: string[] = [];
-    for (let i = 0; i + 1 < raw.length; i += 2) {
-        windows.push(formatWindowMinutes(raw[i] as JulianDateTt, raw[i + 1] as JulianDateTt));
-    }
-    return windows.join(', ');
-}
+const bodies = [Feature.Sun, Feature.Moon, Feature.Mercury, Feature.Venus, Feature.Mars, Feature.Jupiter, Feature.Saturn, Feature.Uranus, Feature.Neptune];
+const signs = Object.values(Signs).filter((value): value is string => typeof value === 'string');
 
-function SearchBox() { 
-    const { search, results } = useDataSearch();
+export default function SearchBox() {
+    const [placements, setPlacements] = useState<Record<number, string>>({});
+    const [startDate, setStartDate] = useState('1900-01-01');
+    const [endDate, setEndDate] = useState('2100-01-01');
+    const [error, setError] = useState('');
+    const { search, cancel, busy, output } = useDataSearch();
 
-    const startSearch = () => {
-        const jde1 = civilDateToJdTt('2005-01-01');
-        const jde2 = civilDateToJdTt('2006-01-01');
-        console.log('calling search')
-        search({
-            startJdTt: jde1,
-            endJdTt: jde2,
-            featureIds: [Feature.Sun],
-            angleStarts: [5 * 30],
-            angleSpans: [30]
-        });
+    function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const selected = bodies.filter(body => placements[body] !== undefined && placements[body] !== '');
+        if (!selected.length) { setError('Select at least one sign.'); return; }
+        if (startDate >= endDate) { setError('End date must be after start date.'); return; }
+        setError('');
+        search({ startDate, endDate, featureIds: selected, angleStarts: selected.map(body => Number(placements[body]) * 30), angleSpans: selected.map(() => 30) });
     }
 
-    return <> 
-        <p className={styles.result}>{formatResults(results)}</p>
-        <button onClick={startSearch}>Search</button>
+    return <>
+        <form onSubmit={submit}>
+            <fieldset disabled={busy}>
+                <legend>Signs</legend>
+                {bodies.map(body => <div key={body}>
+                    <label htmlFor={`body-${body}`}>{Feature[body]} </label>
+                    <select id={`body-${body}`} value={placements[body] ?? ''} onChange={event => setPlacements({ ...placements, [body]: event.target.value })}>
+                        <option value="">Any sign</option>
+                        {signs.map((sign, index) => <option key={sign} value={index}>{sign}</option>)}
+                    </select>
+                </div>)}
+                <p><label>Start date <input type="date" required min="1900-01-01" max="2099-12-31" value={startDate} onChange={event => setStartDate(event.target.value)} /></label></p>
+                <p><label>End date (exclusive) <input type="date" required min="1900-01-02" max="2100-01-01" value={endDate} onChange={event => setEndDate(event.target.value)} /></label></p>
+                <button type="submit">Search</button>
+            </fieldset>
+            {busy && <button type="button" onClick={cancel}>Cancel</button>}
+        </form>
+        <p>Dates use UTC (estimated UT before 1972). Searches at 1900 and 2100 are limited to the supported range.</p>
+        <p>Times are rounded to the nearest minute. Astronomical boundaries are approximate.</p>
+        {error && <p role="alert">{error}</p>}
+        <h2>Output</h2>
+        <div role="status" aria-live="polite">{output.split('\n').map((line, index) => <div key={index}>{line}</div>)}</div>
     </>;
 }
-
-export default SearchBox;
