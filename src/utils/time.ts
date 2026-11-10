@@ -78,7 +78,7 @@ export function jdTtToCivil(jdTt: JulianDateTt): CivilTime {
 export function formatJdTtMinute(jdTt: JulianDateTt): string {
     const civil = jdTtToCivil(jdTt);
     const rounded = Math.round(civil.unixMs / 60_000) * 60_000;
-    return `${new Date(rounded).toISOString().slice(0, 16).replace('T', ' ')} ${civil.scale}`;
+    return `${new Date(rounded).toISOString().slice(0, 16).replace('T', ' ')} ${civil.scale === 'UT estimate' ? 'UT' : 'UTC'}`;
 }
 
 export function formatWindowMinutes(start: JulianDateTt, end: JulianDateTt): string {

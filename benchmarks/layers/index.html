@@ -1,0 +1,4 @@
+<!doctype html><html><body><h1>Direct WASM layer test</h1><button id="run">Run matched queries</button><pre id="output"></pre><script type="module">
+const button=document.querySelector('#run'), output=document.querySelector('#output');
+button.onclick=()=>{button.disabled=true;output.textContent='Running\n';const worker=new Worker(new URL('./worker.mjs',import.meta.url),{type:'module'});worker.onmessage=({data})=>{output.textContent+=JSON.stringify(data)+'\n';if(data.done||data.error){button.disabled=false;worker.terminate();}};worker.postMessage({});};
+</script></body></html>

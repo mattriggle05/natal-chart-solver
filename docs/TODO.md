@@ -1,11 +1,13 @@
 # Natal Chart Solver — First Version Plan
 
-Updated 2026-09-29. This plan defines a bounded path to a usable first version. Deferred work is not a prerequisite for starting the UI or completing this milestone. The original broad completion inventory remains in Git history.
+Updated 2026-11-10. This plan defines a bounded path to a usable first version. Deferred work is not a prerequisite for starting the UI or completing this milestone. The original broad completion inventory remains in Git history.
 
 ## Scope and decisions
 
+- Performance testing must use the full supported 200-year range, 1900–2100, matching the default user workflow. Do not substitute shorter ranges or extrapolate them to represent full-range performance. This does not prevent focused correctness tests.
+
 - Keep the backend in Rust with the existing VSOP87 and astro dependencies. Ephemeris replacement and C/WASM migration are deferred.
-- Search apparent geocentric tropical longitudes, true equinox of date. The apparent-position implementation has been reviewed and tested; its implementation is complete.
+- Prioritize search performance over precise astronomical boundary agreement. Restore the earlier geometric longitude paths and one-minute numerical refinement; retain the apparent implementation only for tests/diagnostics. Five tests from the stricter accuracy/precision contract currently fail; see [baseline restoration status](../benchmarks/layers/BASELINE_RESTORE.md). Earlier completed milestones below describe historical work, not acceptance of the restored baseline.
 - Search within `[1900-01-01 00:00 TT, 2100-01-01 00:00 TT)`. Users select a subrange; the exported backend bounds are authoritative.
 - Build the initial form around signs for the currently supported bodies: Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, and Neptune. Moon phase remains supported by the backend; a phase input is optional later.
 - Display times to the nearest minute while retaining full internal precision and subminute windows.

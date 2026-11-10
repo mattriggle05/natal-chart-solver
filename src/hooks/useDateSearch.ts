@@ -17,6 +17,7 @@ export function useDataSearch() {
     }
 
     function search(params: SearchParams) {
+        const requestStart = performance.now();
         workerRef.current?.terminate();
         setBusy(true);
         setOutput('Initializing search…');
@@ -42,7 +43,8 @@ export function useDataSearch() {
                 for (let i = 0; i < message.result.length; i += 2) {
                     windows.push(formatWindowMinutes(message.result[i] as JulianDateTt, message.result[i + 1] as JulianDateTt));
                 }
-                finish(windows.length ? `${windows.length} matching interval(s)\n${windows.join('\n')}` : 'No matching intervals.');
+                const timing = `Search: ${(message.computeMs / 1000).toFixed(3)} s; including startup and formatting: ${((performance.now() - requestStart) / 1000).toFixed(3)} s.\n`;
+                finish(timing + (windows.length ? `${windows.length} matching interval(s)\n${windows.join('\n')}` : 'No matching intervals.'));
             };
             worker.postMessage(params);
         } catch (error) {

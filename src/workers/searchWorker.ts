@@ -16,8 +16,9 @@ self.onmessage = async (event: MessageEvent<SearchParams>) => {
         if (startDate === '1900-01-01') start = bounds[0] as typeof start;
         if (endDate === '2100-01-01') end = bounds[1] as typeof end;
         respond({ type: 'searching' });
+        const computeStart = performance.now();
         const result = search(start, end, new Uint8Array(featureIds), new Float64Array(angleStarts), new Float64Array(angleSpans));
-        respond({ type: 'complete', result });
+        respond({ type: 'complete', result, computeMs: performance.now() - computeStart });
     } catch (error) {
         respond({ type: 'error', message: String(error) });
     }

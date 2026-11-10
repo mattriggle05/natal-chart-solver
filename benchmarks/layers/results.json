@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-10",
+  "source": "f62d79ad86098c168a9aa956b9461209173c4b0a",
+  "wasm_sha256": "d43995b12cc9c42f54dfb5138f9bc66020b6c1b551fc850e9dbf21a7f6fbda39",
+  "node": [
+    {
+      "name": "sun200",
+      "trial": 1,
+      "ms": 5774.016209,
+      "windows": 200,
+      "checksum": 980582568.5605383
+    },
+    {
+      "name": "sun200",
+      "trial": 2,
+      "ms": 5811.274792,
+      "windows": 200,
+      "checksum": 980582568.5605383
+    },
+    {
+      "name": "sunmoon200",
+      "trial": 1,
+      "ms": 11127.597875000001,
+      "windows": 244,
+      "checksum": 1196347238.2328494
+    },
+    {
+      "name": "sunmoon200",
+      "trial": 2,
+      "ms": 10657.529124999997,
+      "windows": 244,
+      "checksum": 1196347238.2328494
+    },
+    {
+      "name": "mercury10",
+      "trial": 1,
+      "ms": 3933.929875,
+      "windows": 11,
+      "checksum": 53971999.97178079
+    },
+    {
+      "name": "mercury10",
+      "trial": 2,
+      "ms": 3915.946375,
+      "windows": 11,
+      "checksum": 53971999.97178079
+    }
+  ],
+  "browser": [
+    {
+      "name": "sun200",
+      "trial": 1,
+      "ms": 5919.3,
+      "windows": 200,
+      "checksum": 980582568.5605383
+    },
+    {
+      "name": "sun200",
+      "trial": 2,
+      "ms": 5958.2,
+      "windows": 200,
+      "checksum": 980582568.5605383
+    },
+    {
+      "name": "sunmoon200",
+      "trial": 1,
+      "ms": 10951.1,
+      "windows": 244,
+      "checksum": 1196347238.2328494
+    },
+    {
+      "name": "sunmoon200",
+      "trial": 2,
+      "ms": 11019.4,
+      "windows": 244,
+      "checksum": 1196347238.2328494
+    },
+    {
+      "name": "mercury10",
+      "trial": 1,
+      "ms": 4391.1,
+      "windows": 11,
+      "checksum": 53971999.97178079
+    },
+    {
+      "name": "mercury10",
+      "trial": 2,
+      "ms": 4308.9,
+      "windows": 11,
+      "checksum": 53971999.97178079
+    }
+  ],
+  "frontend": [
+    {
+      "name": "sun200",
+      "computeMs": 6051.8,
+      "totalMs": 6072.5,
+      "windows": 200,
+      "checksum": 980582568.5605383
+    },
+    {
+      "name": "sunmoon200",
+      "computeMs": 11242.4,
+      "totalMs": 11260.3,
+      "windows": 244,
+      "checksum": 1196347238.2328494
+    },
+    {
+      "name": "mercury10",
+      "computeMs": 3733.3,
+      "totalMs": 3750.7,
+      "windows": 11,
+      "checksum": 53971999.97178079
+    }
+  ]
+}

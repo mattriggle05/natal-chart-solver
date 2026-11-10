@@ -1,5 +1,7 @@
 # Backend calculation contract
 
+> Current implementation update (2026-11-10): performance-first geometric longitude calculations and one-minute refinement have replaced the apparent-position search described below. The retained sections describe the prior implementation. Five accuracy/precision regressions remain failing; see [baseline restoration status](../benchmarks/layers/BASELINE_RESTORE.md). Display labels now use UT or UTC without estimate/provisional qualifiers; conversion policies are unchanged.
+
 Status as of 2026-09-30: the apparent-position implementation and fixed reference suites are complete. The final combined acceptance pass passed; see [backend_acceptance.md](backend_acceptance.md). This contract describes a prototype; public acceptance of its astronomical limitations remains a separate release decision.
 
 ## Search domain

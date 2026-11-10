@@ -10,5 +10,5 @@ export interface SearchParams {
 
 export type SearchResponse =
     | { type: 'searching' }
-    | { type: 'complete'; result: Float64Array }
+    | { type: 'complete'; result: Float64Array; computeMs: number }
     | { type: 'error'; message: string };

@@ -1,0 +1,6 @@
+sun200 run=1 ms=164.183 windows=200 checksum=980582566.158020020
+sun200 run=2 ms=162.337 windows=200 checksum=980582566.158020020
+sunmoon200 run=1 ms=172.992 windows=244 checksum=1196347237.982124805
+sunmoon200 run=2 ms=173.331 windows=244 checksum=1196347237.982124805
+mercury10 run=1 ms=416.213 windows=11 checksum=53971999.802170768
+mercury10 run=2 ms=416.259 windows=11 checksum=53971999.802170768

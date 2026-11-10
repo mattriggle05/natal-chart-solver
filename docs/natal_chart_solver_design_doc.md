@@ -1,5 +1,7 @@
 # Natal Chart Solver — Design & Context Document
 
+> Current implementation update (2026-11-10): performance-first geometric longitude calculations and one-minute refinement have replaced the apparent-position search described below. The retained sections describe the prior implementation. Five accuracy/precision regressions remain failing; see [baseline restoration status](../benchmarks/layers/BASELINE_RESTORE.md). Display labels now use UT or UTC without estimate/provisional qualifiers; conversion policies are unchanged.
+
 The current milestone order is defined in [TODO.md](TODO.md). Coordinate conventions, measured accuracy, and limitations are defined in [backend_contract.md](backend_contract.md); historical measurements below are not current performance guarantees.
 
 ## Project Overview
