@@ -35,7 +35,7 @@ yarn-error.log*
 crate/target/
 
 # Wasm binaries
-wasm/pkg
+/wasm/
 # Reproducible JPL reference acquisition
 !scripts/fetch_jpl.py
 !scripts/probe_neptune.py
