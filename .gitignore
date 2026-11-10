@@ -28,19 +28,11 @@ yarn-error.log*
 # Vite
 *.local
 
-# Old testing files
-*.py
-
 # Rust crate files
 crate/target/
 
 # Wasm binaries
 /wasm/
-# Reproducible JPL reference acquisition
-!scripts/fetch_jpl.py
-!scripts/probe_neptune.py
-!scripts/diagnose_ephemeris.py
-!scripts/check_vsop_coefficients.py
-__pycache__/
 
-!scripts/fetch_jpl_windows.py
+# Python cache
+__pycache__/

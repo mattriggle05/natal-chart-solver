@@ -15,8 +15,7 @@
     "build": "npm run build:wasm && tsc && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
-    "test:time": "node --experimental-strip-types --test local/tests/time.test.ts"
+    "deploy": "gh-pages -d build"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
