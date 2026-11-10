@@ -618,7 +618,7 @@ const JPL_POSITION_LIMITS_ARCSEC: [(u8, f64); 9] = [(0,0.2),(1,0.2),(3,0.2),(4,0
 const JPL_POSITION_DATES: [f64; 12] = [2415020.5,2424151.5,2433282.5,2442413.5,2451545.0,2460402.5,2460417.5,2460432.5,2460676.5,2469807.5,2478938.5,2488069.5];
 
 fn jpl_position_fixtures() -> Vec<(u8, f64, f64)> {
-    let mut lines = include_str!("../../fixtures/jpl/positions.csv").lines();
+    let mut lines = include_str!("../../local/fixtures/jpl/positions.csv").lines();
     assert_eq!(lines.next(), Some("feature,jd_tt,longitude_deg,latitude_deg"));
     let rows: Vec<_> = lines.map(|line| {
         let columns: Vec<_> = line.split(',').collect();
@@ -825,7 +825,7 @@ fn diagnostic_apparent(jd: f64, feature: Feature, provider: &impl Fn(f64, Featur
 
 #[test]
 fn packages_match_original_neptune_coefficients() {
-    for line in include_str!("../../fixtures/jpl/diagnosis/original_neptune.csv").lines().skip(1) {
+    for line in include_str!("../../local/fixtures/jpl/diagnosis/original_neptune.csv").lines().skip(1) {
         let values: Vec<f64> = line.split(',').map(|x| x.parse().unwrap()).collect();
         let jd=values[0];
         let original=values[1].to_degrees();
@@ -854,7 +854,7 @@ fn vsop_frame_rotation_matches_published_fk5_correction() {
 type DiagnosticState = (i32, f64, [f64; 3], [f64; 3]);
 
 fn jpl_diagnostic_states() -> Vec<DiagnosticState> {
-    include_str!("../../fixtures/jpl/diagnosis/vectors.csv").lines().skip(1).map(|line| {
+    include_str!("../../local/fixtures/jpl/diagnosis/vectors.csv").lines().skip(1).map(|line| {
         let v: Vec<f64> = line.split(',').map(|x| x.parse().unwrap()).collect();
         (v[0] as i32, v[1], [v[2],v[3],v[4]], [v[5],v[6],v[7]])
     }).collect()
@@ -889,7 +889,7 @@ fn apparent_corrections_match_jpl_after_observed_nutation_adjustment() {
 #[test]
 fn complete_search_windows_match_fixed_jpl_references() {
     let expected_names = ["sun_aries", "moon_wrapped", "moon_phase", "mercury_reentry", "mercury_station_window", "sun_and_moon", "clipped_both", "clipped_start", "clipped_end", "empty_combination", "neptune_aries", "sun_subminute"];
-    let lines: Vec<_> = include_str!("../../fixtures/jpl/windows/cases.txt").lines().collect();
+    let lines: Vec<_> = include_str!("../../local/fixtures/jpl/windows/cases.txt").lines().collect();
     assert_eq!(lines.len(), expected_names.len());
     for (line, expected_name) in lines.iter().zip(expected_names) {
         let columns: Vec<_> = line.split('|').collect();

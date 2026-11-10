@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
-    "test:time": "node --experimental-strip-types --test tests/time.test.ts"
+    "test:time": "node --experimental-strip-types --test local/tests/time.test.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
